@@ -218,7 +218,7 @@ partial class MainForm
         //
         txtAudioFilter.Location = new Point(110, 140);
         txtAudioFilter.Name = "txtAudioFilter";
-        txtAudioFilter.PlaceholderText = "eng, jpn";
+        txtAudioFilter.PlaceholderText = "empty = keep all";
         txtAudioFilter.Size = new Size(250, 23);
         //
         // lblSubtitles
@@ -232,7 +232,7 @@ partial class MainForm
         //
         txtSubtitleFilter.Location = new Point(480, 140);
         txtSubtitleFilter.Name = "txtSubtitleFilter";
-        txtSubtitleFilter.PlaceholderText = "eng";
+        txtSubtitleFilter.PlaceholderText = "empty = keep all";
         txtSubtitleFilter.Size = new Size(250, 23);
         //
         // lblHint
@@ -241,7 +241,7 @@ partial class MainForm
         lblHint.ForeColor = SystemColors.GrayText;
         lblHint.Location = new Point(12, 170);
         lblHint.Name = "lblHint";
-        lblHint.Text = "Comma-separated values to keep. \"none\" drops all tracks of that type; empty keeps all. \"und\" matches tracks without a language.";
+        lblHint.Text = "Comma-separated values to keep (e.g. eng, jpn). \"none\" drops all tracks of that type; empty keeps all. \"und\" matches tracks without a language.";
         //
         // btnScan
         //

@@ -235,13 +235,16 @@ public partial class MainForm : Form
     private void LogFileResult(FileResult result, string inputRoot)
     {
         var name = Relative(inputRoot, result.InputPath);
+        // "kept s:all" is the tell-tale of an accidentally empty filter.
+        var kept = result.KeptAudio is null ? ""
+            : $", kept a:{result.KeptAudio} s:{result.KeptSubtitles}";
         switch (result.Outcome)
         {
             case FileOutcome.Ok:
-                Log($"[ok] {name} — removed a:{result.RemovedAudio} s:{result.RemovedSubtitles}");
+                Log($"[ok] {name} — removed a:{result.RemovedAudio} s:{result.RemovedSubtitles}{kept}");
                 break;
             case FileOutcome.OkWithWarnings:
-                Log($"[ok] {name} — removed a:{result.RemovedAudio} s:{result.RemovedSubtitles}");
+                Log($"[ok] {name} — removed a:{result.RemovedAudio} s:{result.RemovedSubtitles}{kept}");
                 Log($"[warn] {name} — {result.Message}");
                 break;
             case FileOutcome.SkippedClean:
