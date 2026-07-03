@@ -330,7 +330,7 @@ partial class MainForm
         lblGaugeCpu.BorderStyle = Border3DStyle.SunkenOuter;
         lblGaugeCpu.Name = "lblGaugeCpu";
         lblGaugeCpu.Text = "CPU –";
-        lblGaugeCpu.ToolTipText = "System-wide CPU utilization";
+        lblGaugeCpu.ToolTipText = "System-wide CPU utilization (Task Manager's metric)";
         lblGaugeDisk.BorderStyle = Border3DStyle.SunkenOuter;
         lblGaugeDisk.Name = "lblGaugeDisk";
         lblGaugeDisk.Text = "DISK –";
@@ -338,7 +338,7 @@ partial class MainForm
         lblGaugeNet.BorderStyle = Border3DStyle.SunkenOuter;
         lblGaugeNet.Name = "lblGaugeNet";
         lblGaugeNet.Text = "NET –";
-        lblGaugeNet.ToolTipText = "Network throughput as % of link speed";
+        lblGaugeNet.ToolTipText = "Busiest network adapter, % of its link speed";
         lblGaugeRate.Name = "lblGaugeRate";
         lblGaugeRate.Text = "– MB/s";
         lblGaugeRate.ToolTipText = "Remux write throughput";

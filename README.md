@@ -21,9 +21,10 @@ into a mirrored output tree — never touching your source files.
   scale-up dispatches new jobs immediately; scale-down never kills a running job, it just stops
   backfilling slots until the active count drains to the new target.
 - **Lossless** — pure remux, no re-encoding. Sources are never modified.
-- **Bottleneck gauges** — the status bar shows system CPU / DISK / NET utilization and the
-  current remux write throughput (MB/s), refreshed twice a second, with a frame around
-  whichever resource is currently the busiest. When a run finishes or is stopped, the log
+- **Bottleneck gauges** — the status bar shows system CPU utilization (Task Manager's
+  frequency-normalized metric), disk active time, the busiest network adapter's share of its
+  link speed, and the current remux write throughput (MB/s), refreshed twice a second, with
+  a frame around whichever resource is currently the busiest. When a run finishes or is stopped, the log
   gets a session verdict, e.g. `likely bottleneck: NETWORK (avg 78%, peak 96%)`.
 
 ## Requirements
