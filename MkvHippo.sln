@@ -7,6 +7,12 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{775D1B7B-7A6
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MkvHippo.App", "src\MkvHippo.App\MkvHippo.App.csproj", "{09687A16-62F3-44D4-A575-5E5932E1E988}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MkvHippo.Core", "src\MkvHippo.Core\MkvHippo.Core.csproj", "{F2FC8C01-9F5C-47F8-AA34-029EA0F8ACE5}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{B0B09AFD-0857-4014-B4F8-0E3DEB606989}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MkvHippo.Core.Tests", "tests\MkvHippo.Core.Tests\MkvHippo.Core.Tests.csproj", "{3DC03521-6250-4B1C-8E4F-44CB57590A19}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -20,8 +26,18 @@ Global
 		{09687A16-62F3-44D4-A575-5E5932E1E988}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{09687A16-62F3-44D4-A575-5E5932E1E988}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{09687A16-62F3-44D4-A575-5E5932E1E988}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F2FC8C01-9F5C-47F8-AA34-029EA0F8ACE5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F2FC8C01-9F5C-47F8-AA34-029EA0F8ACE5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F2FC8C01-9F5C-47F8-AA34-029EA0F8ACE5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F2FC8C01-9F5C-47F8-AA34-029EA0F8ACE5}.Release|Any CPU.Build.0 = Release|Any CPU
+		{3DC03521-6250-4B1C-8E4F-44CB57590A19}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{3DC03521-6250-4B1C-8E4F-44CB57590A19}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{3DC03521-6250-4B1C-8E4F-44CB57590A19}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{3DC03521-6250-4B1C-8E4F-44CB57590A19}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{09687A16-62F3-44D4-A575-5E5932E1E988} = {775D1B7B-7A6A-460F-B37E-15B49CBF588A}
+		{F2FC8C01-9F5C-47F8-AA34-029EA0F8ACE5} = {775D1B7B-7A6A-460F-B37E-15B49CBF588A}
+		{3DC03521-6250-4B1C-8E4F-44CB57590A19} = {B0B09AFD-0857-4014-B4F8-0E3DEB606989}
 	EndGlobalSection
 EndGlobal

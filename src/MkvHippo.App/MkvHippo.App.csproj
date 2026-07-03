@@ -10,6 +10,10 @@
     <RootNamespace>MkvHippo.App</RootNamespace>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <!-- Only takes effect for -p:PublishSingleFile=true publishes: embed the native
+         runtime DLLs so MKVHippo.exe is the whole deliverable. -->
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+    <DebugType>embedded</DebugType>
   </PropertyGroup>
 
   <ItemGroup>
