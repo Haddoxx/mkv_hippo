@@ -32,3 +32,13 @@ convert g16.png g20.png g24.png g32.png g40.png g48.png g64.png g256.png \
 ```
 
 Unlike the previous etching test, the bold flat artwork stays legible down to 16 px.
+
+## Vector version
+
+`hippo_head.svg` — vtracer trace of the Real-ESRGAN master (`--mode spline
+--filter_speckle 12 --color_precision 8 --gradient_step 48 --corner_threshold 80`),
+faithful and resolution-independent; use it for any large-format artwork. Tracing a
+*plain* Lanczos upscale was retested and still fails regardless of scale factor: the
+anti-aliased stroke fringe scales up with the image, so the solid-core-to-fringe ratio
+never improves — only the neural upscale converts fringe into solid stroke, which is
+why the trace must run on the ESRGAN output.
