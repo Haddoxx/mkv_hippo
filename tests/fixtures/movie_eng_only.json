@@ -1,0 +1,60 @@
+{
+  "attachments": [],
+  "chapters": [],
+  "container": {
+    "properties": {
+      "container_type": 17,
+      "duration": 1421917000000,
+      "is_providing_timestamps": true,
+      "muxing_application": "libebml v1.4.2 + libmatroska v1.6.4",
+      "segment_uid": "4b1e0f7a2c9d48e3b6a5d8c1f0e29b74",
+      "writing_application": "mkvmerge v68.0 ('The Curtain') 64-bit"
+    },
+    "recognized": true,
+    "supported": true,
+    "type": "Matroska"
+  },
+  "errors": [],
+  "file_name": "movie_eng_only.mkv",
+  "global_tags": [],
+  "identification_format_version": 12,
+  "track_tags": [],
+  "tracks": [
+    {
+      "codec": "HEVC/H.265/MPEG-H",
+      "id": 0,
+      "properties": {
+        "codec_id": "V_MPEGH/ISO/HEVC",
+        "codec_private_length": 112,
+        "default_track": true,
+        "display_dimensions": "3840x2160",
+        "enabled_track": true,
+        "forced_track": false,
+        "language": "und",
+        "language_ietf": "und",
+        "number": 1,
+        "pixel_dimensions": "3840x2160",
+        "uid": 11
+      },
+      "type": "video"
+    },
+    {
+      "codec": "E-AC-3",
+      "id": 1,
+      "properties": {
+        "audio_channels": 6,
+        "audio_sampling_frequency": 48000,
+        "codec_id": "A_EAC3",
+        "default_track": true,
+        "enabled_track": true,
+        "forced_track": false,
+        "language": "eng",
+        "language_ietf": "en",
+        "number": 2,
+        "uid": 12
+      },
+      "type": "audio"
+    }
+  ],
+  "warnings": []
+}
