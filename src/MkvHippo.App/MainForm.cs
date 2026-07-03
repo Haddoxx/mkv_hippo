@@ -13,6 +13,7 @@ public partial class MainForm : Form
     private int _parallelTarget = 2;
     private bool _outputWasAutoFilled;
     private bool _settingOutputProgrammatically;
+    private string? _lastScannedInput;
 
     public MainForm()
     {
@@ -83,9 +84,18 @@ public partial class MainForm : Form
 
         var progress = new Progress<ProgressEvent>(evt => HandleProgress(evt, inputRoot));
         SetBusy(true);
-        Log($"starting: {inputRoot} → {outputRoot}");
         try
         {
+            if (!HasScanned(inputRoot))
+            {
+                Log("input folder not scanned yet — scanning first");
+                var report = await ExecuteScanAsync(inputRoot, mkvmergePath, progress);
+                if (report.WasCancelled)
+                    return;
+                Log("");
+            }
+
+            Log($"starting: {inputRoot} → {outputRoot}");
             var summary = await Task.Run(() =>
                 new BatchRunner().RunAsync(options, _scheduler!, progress, _cts!.Token));
             LogSummary(summary);
@@ -109,12 +119,9 @@ public partial class MainForm : Form
 
         var progress = new Progress<ProgressEvent>(evt => HandleProgress(evt, inputRoot));
         SetBusy(true);
-        Log($"scanning: {inputRoot}");
         try
         {
-            var report = await Task.Run(() =>
-                new BatchRunner().ScanAsync(inputRoot, mkvmergePath, _scheduler!, progress, _cts!.Token));
-            LogScanReport(report, inputRoot);
+            await ExecuteScanAsync(inputRoot, mkvmergePath, progress);
         }
         catch (Exception ex)
         {
@@ -125,6 +132,24 @@ public partial class MainForm : Form
             SetBusy(false);
         }
     }
+
+    /// <summary>Runs the identify-only scan, logs the report, and remembers the scanned input.</summary>
+    private async Task<ScanReport> ExecuteScanAsync(
+        string inputRoot, string mkvmergePath, IProgress<ProgressEvent> progress)
+    {
+        Log($"scanning: {inputRoot}");
+        var report = await Task.Run(() =>
+            new BatchRunner().ScanAsync(inputRoot, mkvmergePath, _scheduler!, progress, _cts!.Token));
+        LogScanReport(report, inputRoot);
+        if (!report.WasCancelled)
+            _lastScannedInput = Path.GetFullPath(inputRoot);
+        return report;
+    }
+
+    private bool HasScanned(string inputRoot) =>
+        _lastScannedInput is not null && string.Equals(
+            _lastScannedInput, Path.GetFullPath(inputRoot),
+            OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
 
     private void OnStop(object? sender, EventArgs e)
     {
@@ -243,6 +268,17 @@ public partial class MainForm : Form
             $"{summary.Failed} failed{cancelled} of {summary.TotalFiles}");
         Log($"bytes: {FormatBytes(summary.BytesIn)} in → {FormatBytes(summary.BytesOut)} out; " +
             $"elapsed {summary.Elapsed:hh\\:mm\\:ss}");
+
+        // Suppressed after a stop: unscanned files could make the warning a false alarm.
+        if (!summary.WasCancelled)
+        {
+            if (summary.UnmatchedAudioTokens.Count > 0)
+                Log($"[warn] audio filter value(s) \"{string.Join(", ", summary.UnmatchedAudioTokens)}\" " +
+                    "matched no tracks in any file");
+            if (summary.UnmatchedSubtitleTokens.Count > 0)
+                Log($"[warn] subtitle filter value(s) \"{string.Join(", ", summary.UnmatchedSubtitleTokens)}\" " +
+                    "matched no tracks in any file");
+        }
     }
 
     private void LogScanReport(ScanReport report, string inputRoot)

@@ -12,7 +12,11 @@ into a mirrored output tree — never touching your source files.
   (`eng, jpn`), by mkvmerge track ID, drop all of a type (`none`), or keep all (leave blank).
 - **Identify-first** — every file's real track layout is read via `mkvmerge -J` before any
   decision; files that already match your filters are skipped ("already clean"), and filters
-  matching zero tracks skip with a warning instead of producing a silent file.
+  matching zero tracks skip with a warning instead of producing a silent file. Starting a batch
+  on a folder you haven't scanned yet runs the scan automatically first.
+- **Filter feedback** — scan lines show both language forms when they differ (e.g.
+  `[en / eng]`; a filter matches either), and the end-of-run summary warns about filter values
+  that matched no tracks in any file (likely typos).
 - **Live parallelism control** — process 1–4 files concurrently, adjustable *while running*:
   scale-up dispatches new jobs immediately; scale-down never kills a running job, it just stops
   backfilling slots until the active count drains to the new target.
@@ -34,7 +38,8 @@ into a mirrored output tree — never touching your source files.
      tracks with an undetermined/missing language.
    - `none` — drop **all** tracks of that type.
    - empty — keep all tracks of that type.
-4. **Scan** for an identify-only report grouped by track layout, or **Start** to process.
+4. **Scan** for an identify-only report grouped by track layout, or **Start** to process
+   (Start scans first if the input folder hasn't been scanned yet).
 5. Adjust **Parallel files** (1–4) any time, even mid-batch. **Stop** cancels: pending files are
    not started, running `mkvmerge` processes are killed and their partial outputs deleted.
 
