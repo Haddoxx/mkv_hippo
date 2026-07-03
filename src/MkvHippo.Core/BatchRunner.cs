@@ -6,12 +6,21 @@ using MkvHippo.Core.Scheduling;
 
 namespace MkvHippo.Core;
 
+public enum OverwriteBehavior
+{
+    /// <summary>Never clobber an existing destination file; write "name (1).mkv" instead.</summary>
+    AutoRename,
+    /// <summary>Replace an existing destination file.</summary>
+    Overwrite,
+}
+
 public sealed class BatchOptions
 {
     public required string InputRoot { get; init; }
     public required string OutputRoot { get; init; }
     public required string MkvmergePath { get; init; }
     public required PlanOptions Plan { get; init; }
+    public OverwriteBehavior Overwrite { get; init; } = OverwriteBehavior.AutoRename;
 }
 
 public sealed record ScanGroup(string Signature, IReadOnlyList<MkvTrack> Tracks, IReadOnlyList<string> Files);
@@ -80,7 +89,8 @@ public sealed class BatchRunner
                 FileResult result;
                 try
                 {
-                    result = await ProcessOneAsync(options, identifier, remuxer, file, AccumulateMatches, jobCt)
+                    result = await ProcessOneAsync(options, identifier, remuxer, file, AccumulateMatches,
+                        output => progress?.Report(new FileOutputResolvedEvent(file, output)), jobCt)
                         .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
@@ -134,7 +144,7 @@ public sealed class BatchRunner
 
     private static async Task<FileResult> ProcessOneAsync(
         BatchOptions options, MkvIdentifier identifier, MkvRemuxer remuxer, string file,
-        Action<MkvFileInfo> onIdentified, CancellationToken ct)
+        Action<MkvFileInfo> onIdentified, Action<string> onOutputResolved, CancellationToken ct)
     {
         var info = await identifier.IdentifyAsync(options.MkvmergePath, file, ct).ConfigureAwait(false);
         onIdentified(info);
@@ -150,6 +160,9 @@ public sealed class BatchRunner
 
             default:
                 var outputPath = OutputPathMapper.Map(options.InputRoot, options.OutputRoot, file);
+                if (options.Overwrite == OverwriteBehavior.AutoRename)
+                    outputPath = OutputPathMapper.MakeUnique(outputPath);
+                onOutputResolved(outputPath);
                 var remux = await remuxer.RemuxAsync(options.MkvmergePath, plan, file, outputPath, ct)
                     .ConfigureAwait(false);
 
@@ -167,7 +180,8 @@ public sealed class BatchRunner
                     bytesIn,
                     bytesOut,
                     plan.KeptAudioSummary,
-                    plan.KeptSubtitleSummary);
+                    plan.KeptSubtitleSummary,
+                    outputPath);
         }
     }
 

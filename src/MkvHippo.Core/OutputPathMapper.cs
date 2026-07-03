@@ -30,6 +30,25 @@ public static class OutputPathMapper
             throw new ArgumentException("The output folder must not be inside (or equal to) the input folder.");
     }
 
+    /// <summary>
+    /// Windows-style collision avoidance: returns the path unchanged if it is free,
+    /// otherwise "name (1).mkv", "name (2).mkv", … — the first that does not exist.
+    /// </summary>
+    public static string MakeUnique(string path)
+    {
+        if (!File.Exists(path))
+            return path;
+        var directory = Path.GetDirectoryName(path) ?? "";
+        var stem = Path.GetFileNameWithoutExtension(path);
+        var extension = Path.GetExtension(path);
+        for (int n = 1; ; n++)
+        {
+            var candidate = Path.Combine(directory, $"{stem} ({n}){extension}");
+            if (!File.Exists(candidate))
+                return candidate;
+        }
+    }
+
     /// <summary>Default output root: a sibling of the input named "&lt;input&gt;-hippo".</summary>
     public static string DefaultOutputRoot(string inputRoot)
     {

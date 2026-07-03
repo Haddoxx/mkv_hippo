@@ -57,12 +57,15 @@ public class BatchRunnerTests : IDisposable
         };
     }
 
-    private BatchOptions Options(string audio = "eng", string subs = "eng") => new()
+    private BatchOptions Options(
+        string audio = "eng", string subs = "eng",
+        OverwriteBehavior overwrite = OverwriteBehavior.AutoRename) => new()
     {
         InputRoot = _inputRoot,
         OutputRoot = _outputRoot,
         MkvmergePath = "mkvmerge",
         Plan = PlanOptions.FromText(FilterMode.Languages, audio, subs),
+        Overwrite = overwrite,
     };
 
     [Fact]
@@ -109,6 +112,49 @@ public class BatchRunnerTests : IDisposable
         Assert.Contains(finished, e => e.Result.Outcome == FileOutcome.SkippedClean);
         Assert.Contains(finished, e => e.Result.Outcome == FileOutcome.SkippedNoMatch
             && e.Result.Message!.Contains("audio filter"));
+    }
+
+    [Fact]
+    public async Task AutoRenameNeverClobbersAnExistingDestination()
+    {
+        AddSourceFile("movie.mkv");
+        var existing = Path.Combine(_outputRoot, "movie.mkv");
+        Directory.CreateDirectory(_outputRoot);
+        File.WriteAllText(existing, "PRECIOUS");
+        var runner = MkvmergeEmulator(_ => "movie_multilang.json");
+
+        var events = new List<ProgressEvent>();
+        var summary = await new BatchRunner(runner).RunAsync(
+            Options(overwrite: OverwriteBehavior.AutoRename), new AdaptiveScheduler(1),
+            new SynchronousProgress(events), CancellationToken.None);
+
+        Assert.Equal(1, summary.Succeeded);
+        Assert.Equal("PRECIOUS", File.ReadAllText(existing));
+        var renamed = Path.Combine(_outputRoot, "movie (1).mkv");
+        Assert.True(File.Exists(renamed), "output must be written under an auto-renamed name");
+
+        var finished = Assert.Single(events.OfType<FileFinishedEvent>());
+        Assert.Equal(renamed, finished.Result.OutputPath);
+        var resolved = Assert.Single(events.OfType<FileOutputResolvedEvent>());
+        Assert.Equal(renamed, resolved.OutputPath);
+    }
+
+    [Fact]
+    public async Task OverwriteModeReplacesAnExistingDestination()
+    {
+        AddSourceFile("movie.mkv");
+        var existing = Path.Combine(_outputRoot, "movie.mkv");
+        Directory.CreateDirectory(_outputRoot);
+        File.WriteAllText(existing, "OLD");
+        var runner = MkvmergeEmulator(_ => "movie_multilang.json");
+
+        var summary = await new BatchRunner(runner).RunAsync(
+            Options(overwrite: OverwriteBehavior.Overwrite), new AdaptiveScheduler(1),
+            null, CancellationToken.None);
+
+        Assert.Equal(1, summary.Succeeded);
+        Assert.Equal("REMUXED", File.ReadAllText(existing));
+        Assert.False(File.Exists(Path.Combine(_outputRoot, "movie (1).mkv")));
     }
 
     [Fact]

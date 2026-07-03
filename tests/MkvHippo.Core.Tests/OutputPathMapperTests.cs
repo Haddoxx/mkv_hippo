@@ -59,4 +59,41 @@ public class OutputPathMapperTests
     {
         Assert.Equal(Root + "-hippo", OutputPathMapper.DefaultOutputRoot(Root + Path.DirectorySeparatorChar));
     }
+
+    [Fact]
+    public void MakeUniqueReturnsThePathUnchangedWhenFree()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "hippo-unique-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "movie.mkv");
+            Assert.Equal(path, OutputPathMapper.MakeUnique(path));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void MakeUniqueAppendsTheFirstFreeCounter()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "hippo-unique-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "movie.mkv");
+            File.WriteAllText(path, "x");
+            Assert.Equal(Path.Combine(dir, "movie (1).mkv"), OutputPathMapper.MakeUnique(path));
+
+            File.WriteAllText(Path.Combine(dir, "movie (1).mkv"), "x");
+            File.WriteAllText(Path.Combine(dir, "movie (2).mkv"), "x");
+            Assert.Equal(Path.Combine(dir, "movie (3).mkv"), OutputPathMapper.MakeUnique(path));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
 }
