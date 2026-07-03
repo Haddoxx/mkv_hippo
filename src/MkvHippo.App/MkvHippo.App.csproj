@@ -8,6 +8,9 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <AssemblyName>MKVHippo</AssemblyName>
     <RootNamespace>MkvHippo.App</RootNamespace>
+    <Version>0.1.0</Version>
+    <Product>MKV Hippo</Product>
+    <Company>Haddoxx</Company>
     <ApplicationHighDpiMode>PerMonitorV2</ApplicationHighDpiMode>
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <!-- Only takes effect for -p:PublishSingleFile=true publishes: embed the native

@@ -27,6 +27,9 @@ public partial class MainForm : Form
     {
         InitializeComponent();
 
+        var version = typeof(MainForm).Assembly.GetName().Version;
+        Text = $"MKV Hippo v{version?.ToString(3) ?? "?"} by Haddoxx";
+
         var gaugeTimer = new System.Windows.Forms.Timer(components) { Interval = 500 };
         gaugeTimer.Tick += OnGaugeTick;
         gaugeTimer.Start();
