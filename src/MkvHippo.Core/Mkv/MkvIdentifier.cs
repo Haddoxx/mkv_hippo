@@ -38,9 +38,26 @@ public sealed record MkvTrack(
         }
     }
 
-    public string DisplayLanguage =>
-        !string.IsNullOrWhiteSpace(LanguageIetf) ? LanguageIetf :
-        !string.IsNullOrWhiteSpace(Language) ? Language : "und";
+    /// <summary>
+    /// Human-readable language: both forms when the IETF tag and the legacy
+    /// three-letter code differ (e.g. "en / eng"), so users see every value a
+    /// language filter can match.
+    /// </summary>
+    public string DisplayLanguage
+    {
+        get
+        {
+            var ietf = string.IsNullOrWhiteSpace(LanguageIetf) ? null : LanguageIetf.Trim();
+            var legacy = string.IsNullOrWhiteSpace(Language) ? null : Language.Trim();
+            if (ietf is null && legacy is null)
+                return "und";
+            if (ietf is null)
+                return legacy!;
+            if (legacy is null || string.Equals(ietf, legacy, StringComparison.OrdinalIgnoreCase))
+                return ietf;
+            return $"{ietf} / {legacy}";
+        }
+    }
 
     public string LayoutKey => $"{Id}:{Type}:{Language ?? ""}:{LanguageIetf ?? ""}";
 }

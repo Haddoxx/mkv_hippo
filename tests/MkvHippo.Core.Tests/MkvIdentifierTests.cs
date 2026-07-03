@@ -52,6 +52,21 @@ public class MkvIdentifierTests
     }
 
     [Fact]
+    public void DisplayLanguageShowsBothFormsWhenTheyDiffer()
+    {
+        var multilang = Fixtures.Parse("movie_multilang.json");
+        Assert.Equal("en / eng", multilang.Tracks.Single(t => t.Id == 1).DisplayLanguage);
+        Assert.Equal("ja / jpn", multilang.Tracks.Single(t => t.Id == 2).DisplayLanguage);
+
+        // Identical forms collapse to one; missing languages show "und".
+        Assert.Equal("und", multilang.Tracks.Single(t => t.Id == 0).DisplayLanguage);
+        Assert.Equal("und", Fixtures.Parse("movie_no_language.json").AudioTracks[0].DisplayLanguage);
+
+        // Regional IETF tags keep their original casing.
+        Assert.Equal("en-US / eng", Fixtures.Parse("movie_exotic.json").AudioTracks[0].DisplayLanguage);
+    }
+
+    [Fact]
     public void UnknownTrackTypesMapToOther()
     {
         var info = Fixtures.Parse("movie_exotic.json");

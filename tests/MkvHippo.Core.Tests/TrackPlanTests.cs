@@ -155,6 +155,38 @@ public class TrackPlanTests
         Assert.Equal(PlanAction.SkipAlreadyClean, plan.Action);
     }
 
+    // --- Matched-token reporting ---
+
+    [Fact]
+    public void MatchedTokensReportsWhichFilterValuesHit()
+    {
+        var file = Fixtures.Parse("movie_multilang.json");
+        var filter = TrackFilter.Parse("eng, kor, ja");
+
+        var matched = TrackPlan.MatchedTokens(file.AudioTracks, filter, FilterMode.Languages);
+
+        Assert.Equal(new HashSet<string> { "eng", "ja" }, matched);
+    }
+
+    [Fact]
+    public void MatchedTokensIsEmptyForKeepAllAndDropAllFilters()
+    {
+        var file = Fixtures.Parse("movie_multilang.json");
+        Assert.Empty(TrackPlan.MatchedTokens(file.AudioTracks, TrackFilter.Parse(""), FilterMode.Languages));
+        Assert.Empty(TrackPlan.MatchedTokens(file.AudioTracks, TrackFilter.Parse("none"), FilterMode.Languages));
+    }
+
+    [Fact]
+    public void MatchedTokensWorksInTrackIdMode()
+    {
+        var file = Fixtures.Parse("movie_multilang.json");
+        var filter = TrackFilter.Parse("1, 77");
+
+        var matched = TrackPlan.MatchedTokens(file.AudioTracks, filter, FilterMode.TrackIds);
+
+        Assert.Equal(new HashSet<string> { "1" }, matched);
+    }
+
     // --- Track-ID mode ---
 
     [Fact]

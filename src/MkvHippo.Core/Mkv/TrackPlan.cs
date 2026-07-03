@@ -112,11 +112,27 @@ public sealed record TrackPlan(
         return tracks.Where(t => Matches(t, filter, mode)).ToList();
     }
 
-    private static bool Matches(MkvTrack track, TrackFilter filter, FilterMode mode) => mode switch
+    private static bool Matches(MkvTrack track, TrackFilter filter, FilterMode mode) =>
+        filter.Tokens.Any(token => MatchesToken(track, token, mode));
+
+    private static bool MatchesToken(MkvTrack track, string token, FilterMode mode) => mode switch
     {
-        FilterMode.TrackIds => filter.Tokens.Contains(track.Id.ToString(CultureInfo.InvariantCulture)),
-        _ => track.LanguageTokens.Any(filter.Tokens.Contains),
+        FilterMode.TrackIds => token == track.Id.ToString(CultureInfo.InvariantCulture),
+        _ => track.LanguageTokens.Contains(token),
     };
+
+    /// <summary>
+    /// The filter tokens that match at least one of the given tracks. Batch code unions
+    /// this across files to warn about filter values that never matched anything.
+    /// </summary>
+    public static IReadOnlySet<string> MatchedTokens(
+        IEnumerable<MkvTrack> tracks, TrackFilter filter, FilterMode mode)
+    {
+        if (filter.KeepAll || filter.DropAll)
+            return new HashSet<string>();
+        var list = tracks as IReadOnlyList<MkvTrack> ?? tracks.ToList();
+        return filter.Tokens.Where(token => list.Any(t => MatchesToken(t, token, mode))).ToHashSet();
+    }
 
     private static bool IsZeroMatch(IReadOnlyList<MkvTrack> tracks, List<MkvTrack> kept, TrackFilter filter) =>
         !filter.KeepAll && !filter.DropAll && tracks.Count > 0 && kept.Count == 0;

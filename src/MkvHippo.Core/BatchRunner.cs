@@ -57,7 +57,20 @@ public sealed class BatchRunner
         var identifier = new MkvIdentifier(_runner);
         var remuxer = new MkvRemuxer(_runner);
         var results = new List<FileResult>();
+        var matchedAudioTokens = new HashSet<string>();
+        var matchedSubtitleTokens = new HashSet<string>();
         int processed = 0;
+
+        void AccumulateMatches(MkvFileInfo info)
+        {
+            lock (matchedAudioTokens)
+            {
+                matchedAudioTokens.UnionWith(
+                    TrackPlan.MatchedTokens(info.AudioTracks, options.Plan.Audio, options.Plan.Mode));
+                matchedSubtitleTokens.UnionWith(
+                    TrackPlan.MatchedTokens(info.SubtitleTracks, options.Plan.Subtitles, options.Plan.Mode));
+            }
+        }
 
         foreach (var file in files)
         {
@@ -67,7 +80,8 @@ public sealed class BatchRunner
                 FileResult result;
                 try
                 {
-                    result = await ProcessOneAsync(options, identifier, remuxer, file, jobCt).ConfigureAwait(false);
+                    result = await ProcessOneAsync(options, identifier, remuxer, file, AccumulateMatches, jobCt)
+                        .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -95,23 +109,35 @@ public sealed class BatchRunner
         {
             // Files cancelled before their job ever ran never produced a result; count them too.
             int neverStarted = files.Count - results.Count;
-            return new BatchSummary(
-                TotalFiles: files.Count,
-                Succeeded: results.Count(r => r.Succeeded),
-                Skipped: results.Count(r => r.Skipped),
-                Failed: results.Count(r => r.Outcome == FileOutcome.Failed),
-                Cancelled: results.Count(r => r.Outcome == FileOutcome.Cancelled) + neverStarted,
-                BytesIn: results.Where(r => r.Succeeded).Sum(r => r.BytesIn),
-                BytesOut: results.Where(r => r.Succeeded).Sum(r => r.BytesOut),
-                Elapsed: stopwatch.Elapsed,
-                WasCancelled: ct.IsCancellationRequested);
+            lock (matchedAudioTokens)
+            {
+                return new BatchSummary(
+                    TotalFiles: files.Count,
+                    Succeeded: results.Count(r => r.Succeeded),
+                    Skipped: results.Count(r => r.Skipped),
+                    Failed: results.Count(r => r.Outcome == FileOutcome.Failed),
+                    Cancelled: results.Count(r => r.Outcome == FileOutcome.Cancelled) + neverStarted,
+                    BytesIn: results.Where(r => r.Succeeded).Sum(r => r.BytesIn),
+                    BytesOut: results.Where(r => r.Succeeded).Sum(r => r.BytesOut),
+                    Elapsed: stopwatch.Elapsed,
+                    WasCancelled: ct.IsCancellationRequested,
+                    UnmatchedAudioTokens: UnmatchedTokens(options.Plan.Audio, matchedAudioTokens),
+                    UnmatchedSubtitleTokens: UnmatchedTokens(options.Plan.Subtitles, matchedSubtitleTokens));
+            }
         }
     }
 
+    private static IReadOnlyList<string> UnmatchedTokens(TrackFilter filter, HashSet<string> matched) =>
+        filter.KeepAll || filter.DropAll
+            ? Array.Empty<string>()
+            : filter.Tokens.Except(matched).OrderBy(t => t, StringComparer.Ordinal).ToList();
+
     private static async Task<FileResult> ProcessOneAsync(
-        BatchOptions options, MkvIdentifier identifier, MkvRemuxer remuxer, string file, CancellationToken ct)
+        BatchOptions options, MkvIdentifier identifier, MkvRemuxer remuxer, string file,
+        Action<MkvFileInfo> onIdentified, CancellationToken ct)
     {
         var info = await identifier.IdentifyAsync(options.MkvmergePath, file, ct).ConfigureAwait(false);
+        onIdentified(info);
         var plan = TrackPlan.Create(info, options.Plan);
 
         switch (plan.Action)

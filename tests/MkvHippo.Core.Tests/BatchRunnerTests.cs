@@ -111,6 +111,41 @@ public class BatchRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task FilterValuesThatMatchNoFileAnywhereAreReportedInTheSummary()
+    {
+        AddSourceFile("multilang.mkv");
+        AddSourceFile("clean.mkv");
+        var runner = MkvmergeEmulator(name =>
+            name == "multilang.mkv" ? "movie_multilang.json" : "movie_eng_only.json");
+
+        var summary = await new BatchRunner(runner).RunAsync(
+            Options(audio: "eng, kor", subs: "fre, zho"), new AdaptiveScheduler(2),
+            null, CancellationToken.None);
+
+        Assert.Equal(new[] { "kor" }, summary.UnmatchedAudioTokens);
+        Assert.Equal(new[] { "zho" }, summary.UnmatchedSubtitleTokens);
+    }
+
+    [Fact]
+    public async Task FullyMatchedOrKeepAllFiltersReportNoUnmatchedTokens()
+    {
+        AddSourceFile("multilang.mkv");
+        var runner = MkvmergeEmulator(_ => "movie_multilang.json");
+
+        var matched = await new BatchRunner(runner).RunAsync(
+            Options(audio: "eng, ja", subs: "eng"), new AdaptiveScheduler(1),
+            null, CancellationToken.None);
+        Assert.Empty(matched.UnmatchedAudioTokens);
+        Assert.Empty(matched.UnmatchedSubtitleTokens);
+
+        var keepAll = await new BatchRunner(runner).RunAsync(
+            Options(audio: "", subs: "none"), new AdaptiveScheduler(1),
+            null, CancellationToken.None);
+        Assert.Empty(keepAll.UnmatchedAudioTokens);
+        Assert.Empty(keepAll.UnmatchedSubtitleTokens);
+    }
+
+    [Fact]
     public async Task MkvmergeWarningsAreReportedButTheFileCounts()
     {
         AddSourceFile("warned.mkv");

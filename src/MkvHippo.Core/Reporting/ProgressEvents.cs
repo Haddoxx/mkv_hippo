@@ -42,4 +42,6 @@ public sealed record BatchSummary(
     long BytesIn,
     long BytesOut,
     TimeSpan Elapsed,
-    bool WasCancelled);
+    bool WasCancelled,
+    IReadOnlyList<string> UnmatchedAudioTokens,
+    IReadOnlyList<string> UnmatchedSubtitleTokens);
