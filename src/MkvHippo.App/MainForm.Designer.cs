@@ -18,6 +18,9 @@ partial class MainForm
     private RadioButton rbParallel2 = null!;
     private RadioButton rbParallel3 = null!;
     private RadioButton rbParallel4 = null!;
+    private GroupBox grpDestination = null!;
+    private RadioButton rbAutoRename = null!;
+    private RadioButton rbOverwrite = null!;
     private Label lblAudio = null!;
     private TextBox txtAudioFilter = null!;
     private Label lblSubtitles = null!;
@@ -62,6 +65,9 @@ partial class MainForm
         rbParallel2 = new RadioButton();
         rbParallel3 = new RadioButton();
         rbParallel4 = new RadioButton();
+        grpDestination = new GroupBox();
+        rbAutoRename = new RadioButton();
+        rbOverwrite = new RadioButton();
         lblAudio = new Label();
         txtAudioFilter = new TextBox();
         lblSubtitles = new Label();
@@ -81,6 +87,7 @@ partial class MainForm
         lblGaugeRate = new ToolStripStatusLabel();
         grpMode.SuspendLayout();
         grpParallel.SuspendLayout();
+        grpDestination.SuspendLayout();
         statusStrip.SuspendLayout();
         SuspendLayout();
         //
@@ -214,6 +221,34 @@ partial class MainForm
         rbParallel4.Text = "4";
         rbParallel4.UseVisualStyleBackColor = true;
         rbParallel4.CheckedChanged += OnParallelChanged;
+        //
+        // grpDestination
+        //
+        grpDestination.Controls.Add(rbAutoRename);
+        grpDestination.Controls.Add(rbOverwrite);
+        grpDestination.Location = new Point(490, 75);
+        grpDestination.Name = "grpDestination";
+        grpDestination.Size = new Size(250, 52);
+        grpDestination.TabStop = false;
+        grpDestination.Text = "Destination overwrite";
+        //
+        // rbAutoRename
+        //
+        rbAutoRename.AutoSize = true;
+        rbAutoRename.Checked = true;
+        rbAutoRename.Location = new Point(12, 22);
+        rbAutoRename.Name = "rbAutoRename";
+        rbAutoRename.TabStop = true;
+        rbAutoRename.Text = "Auto rename";
+        rbAutoRename.UseVisualStyleBackColor = true;
+        //
+        // rbOverwrite
+        //
+        rbOverwrite.AutoSize = true;
+        rbOverwrite.Location = new Point(130, 22);
+        rbOverwrite.Name = "rbOverwrite";
+        rbOverwrite.Text = "Overwrite";
+        rbOverwrite.UseVisualStyleBackColor = true;
         //
         // lblAudio
         //
@@ -356,6 +391,7 @@ partial class MainForm
         Controls.Add(btnBrowseOutput);
         Controls.Add(grpMode);
         Controls.Add(grpParallel);
+        Controls.Add(grpDestination);
         Controls.Add(lblAudio);
         Controls.Add(txtAudioFilter);
         Controls.Add(lblSubtitles);
@@ -376,6 +412,8 @@ partial class MainForm
         grpMode.PerformLayout();
         grpParallel.ResumeLayout(false);
         grpParallel.PerformLayout();
+        grpDestination.ResumeLayout(false);
+        grpDestination.PerformLayout();
         statusStrip.ResumeLayout(false);
         statusStrip.PerformLayout();
         ResumeLayout(false);

@@ -21,6 +21,9 @@ into a mirrored output tree — never touching your source files.
   scale-up dispatches new jobs immediately; scale-down never kills a running job, it just stops
   backfilling slots until the active count drains to the new target.
 - **Lossless** — pure remux, no re-encoding. Sources are never modified.
+- **Destination overwrite policy** — by default an existing destination file is never
+  clobbered: the new output is written as `name (1).mkv` (then `(2)`, …) and the rename is
+  noted in the log. Select *Overwrite* to replace existing files instead.
 - **Bottleneck gauges** — the status bar shows system CPU utilization (Task Manager's
   frequency-normalized metric), disk active time, the busiest network adapter's share of its
   link speed, and the current remux write throughput (MB/s), refreshed twice a second, with

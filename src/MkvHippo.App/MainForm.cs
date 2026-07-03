@@ -22,7 +22,6 @@ public partial class MainForm : Form
     private BottleneckStats? _sessionStats;
     private ThroughputMeter? _throughput;
     private long _completedOutputBytes;
-    private string? _runOutputRoot;
 
     public MainForm()
     {
@@ -98,11 +97,12 @@ public partial class MainForm : Form
             OutputRoot = outputRoot!,
             MkvmergePath = mkvmergePath,
             Plan = plan,
+            Overwrite = rbOverwrite.Checked ? OverwriteBehavior.Overwrite : OverwriteBehavior.AutoRename,
         };
 
         var progress = new Progress<ProgressEvent>(evt => HandleProgress(evt, inputRoot));
         SetBusy(true);
-        BeginResourceSession(outputRoot!);
+        BeginResourceSession();
         try
         {
             if (!HasScanned(inputRoot))
@@ -173,9 +173,8 @@ public partial class MainForm : Form
 
     // --- Resource gauges & bottleneck tracking ---
 
-    private void BeginResourceSession(string outputRoot)
+    private void BeginResourceSession()
     {
-        _runOutputRoot = outputRoot;
         _sessionStats = new BottleneckStats();
         _throughput = new ThroughputMeter();
         _completedOutputBytes = 0;
@@ -187,7 +186,6 @@ public partial class MainForm : Form
     {
         if (_sessionStats is { SampleCount: > 0 })
             Log(_sessionStats.Summarize());
-        _runOutputRoot = null;
         _sessionStats = null;
         _throughput = null;
         _inFlightOutputs.Clear();
@@ -310,13 +308,8 @@ public partial class MainForm : Form
                 Log($"found {started.TotalFiles} file(s)");
                 break;
 
-            case FileStartedEvent started when _runOutputRoot is not null:
-                try
-                {
-                    _inFlightOutputs[started.InputPath] =
-                        OutputPathMapper.Map(inputRoot, _runOutputRoot, started.InputPath);
-                }
-                catch (ArgumentException) { }
+            case FileOutputResolvedEvent resolved:
+                _inFlightOutputs[resolved.InputPath] = resolved.OutputPath;
                 break;
 
             case FileFinishedEvent finished:
@@ -343,6 +336,13 @@ public partial class MainForm : Form
         // "kept s:all" is the tell-tale of an accidentally empty filter.
         var kept = result.KeptAudio is null ? ""
             : $", kept a:{result.KeptAudio} s:{result.KeptSubtitles}";
+        // Auto-rename kicked in: the destination file name differs from the source's.
+        if (result.OutputPath is not null
+            && !string.Equals(Path.GetFileName(result.OutputPath), Path.GetFileName(result.InputPath),
+                StringComparison.OrdinalIgnoreCase))
+        {
+            kept += $", renamed → {Path.GetFileName(result.OutputPath)}";
+        }
         switch (result.Outcome)
         {
             case FileOutcome.Ok:
@@ -449,6 +449,7 @@ public partial class MainForm : Form
         btnBrowseInput.Enabled = !busy;
         btnBrowseOutput.Enabled = !busy;
         grpMode.Enabled = !busy;
+        grpDestination.Enabled = !busy;
         txtAudioFilter.Enabled = !busy;
         txtSubtitleFilter.Enabled = !busy;
         // grpParallel deliberately stays enabled: the target is adjustable mid-batch.
