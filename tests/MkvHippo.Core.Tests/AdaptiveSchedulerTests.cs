@@ -221,6 +221,59 @@ public class AdaptiveSchedulerTests
     }
 
     [Fact]
+    public async Task RapidTargetChangesCollapseToTheLatestValue()
+    {
+        var scheduler = new AdaptiveScheduler(initialTarget: 4);
+        var jobs = EnqueueControlled(scheduler, 10);
+        await WaitUntilAsync(() => jobs.Take(4).All(j => j.Started), "four jobs start at target 4");
+
+        // Three changes in quick succession: only the last (3) may govern behavior.
+        scheduler.SetTarget(1);
+        scheduler.SetTarget(2);
+        scheduler.SetTarget(3);
+        Assert.Equal(3, scheduler.Target);
+
+        await SettleAsync();
+        Assert.False(jobs[4].Started);
+
+        // One completion reaches the latest target exactly: still no backfill.
+        jobs[0].Release();
+        await WaitUntilAsync(() => scheduler.ActiveCount == 3, "drained to 3");
+        await SettleAsync();
+        Assert.False(jobs[4].Started);
+
+        // The next completion backfills to 3 — the abandoned intermediate
+        // targets (1, 2) never take effect.
+        jobs[1].Release();
+        await WaitUntilAsync(() => jobs[4].Started, "backfill resumes at the latest target");
+        Assert.Equal(3, scheduler.ActiveCount);
+        await SettleAsync();
+        Assert.False(jobs[5].Started);
+
+        await DrainAsync(scheduler, jobs);
+    }
+
+    [Fact]
+    public async Task RevertingAReductionMidDrainRestoresConcurrencyImmediately()
+    {
+        var scheduler = new AdaptiveScheduler(initialTarget: 4);
+        var jobs = EnqueueControlled(scheduler, 10);
+        await WaitUntilAsync(() => jobs.Take(4).All(j => j.Started), "four jobs start at target 4");
+
+        scheduler.SetTarget(1); // begin draining
+        jobs[0].Release();
+        await WaitUntilAsync(() => scheduler.ActiveCount == 3, "one slot drained");
+        await SettleAsync();
+        Assert.False(jobs[4].Started);
+
+        scheduler.SetTarget(4); // change of mind: the pending drain is discarded
+        await WaitUntilAsync(() => jobs[4].Started, "freed slot refilled immediately");
+        Assert.Equal(4, scheduler.ActiveCount);
+
+        await DrainAsync(scheduler, jobs);
+    }
+
+    [Fact]
     public void TargetIsClampedToOneThroughFour()
     {
         var scheduler = new AdaptiveScheduler(initialTarget: 99);
