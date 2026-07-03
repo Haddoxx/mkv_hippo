@@ -15,9 +15,27 @@ public partial class MainForm : Form
     private bool _settingOutputProgrammatically;
     private string? _lastScannedInput;
 
+    private readonly ResourceMonitor _monitor = new();
+    private readonly System.Diagnostics.Stopwatch _sessionClock = new();
+    private readonly Dictionary<string, string> _inFlightOutputs = new();
+    private Font? _gaugeBoldFont;
+    private BottleneckStats? _sessionStats;
+    private ThroughputMeter? _throughput;
+    private long _completedOutputBytes;
+    private string? _runOutputRoot;
+
     public MainForm()
     {
         InitializeComponent();
+
+        var gaugeTimer = new System.Windows.Forms.Timer(components) { Interval = 500 };
+        gaugeTimer.Tick += OnGaugeTick;
+        gaugeTimer.Start();
+        FormClosed += (_, _) =>
+        {
+            _monitor.Dispose();
+            _gaugeBoldFont?.Dispose();
+        };
     }
 
     // --- Folder pickers ---
@@ -84,6 +102,7 @@ public partial class MainForm : Form
 
         var progress = new Progress<ProgressEvent>(evt => HandleProgress(evt, inputRoot));
         SetBusy(true);
+        BeginResourceSession(outputRoot!);
         try
         {
             if (!HasScanned(inputRoot))
@@ -106,6 +125,7 @@ public partial class MainForm : Form
         }
         finally
         {
+            EndResourceSession();
             SetBusy(false);
         }
     }
@@ -150,6 +170,79 @@ public partial class MainForm : Form
         _lastScannedInput is not null && string.Equals(
             _lastScannedInput, Path.GetFullPath(inputRoot),
             OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal);
+
+    // --- Resource gauges & bottleneck tracking ---
+
+    private void BeginResourceSession(string outputRoot)
+    {
+        _runOutputRoot = outputRoot;
+        _sessionStats = new BottleneckStats();
+        _throughput = new ThroughputMeter();
+        _completedOutputBytes = 0;
+        _inFlightOutputs.Clear();
+        _sessionClock.Restart();
+    }
+
+    private void EndResourceSession()
+    {
+        if (_sessionStats is { SampleCount: > 0 })
+            Log(_sessionStats.Summarize());
+        _runOutputRoot = null;
+        _sessionStats = null;
+        _throughput = null;
+        _inFlightOutputs.Clear();
+        _sessionClock.Stop();
+    }
+
+    private void OnGaugeTick(object? sender, EventArgs e)
+    {
+        var (cpu, disk, net) = _monitor.Sample();
+
+        lblGaugeCpu.Text = $"CPU {FormatPercent(cpu)}";
+        lblGaugeDisk.Text = $"DISK {FormatPercent(disk)}";
+        lblGaugeNet.Text = $"NET {FormatPercent(net)}";
+
+        var gauges = new (ToolStripStatusLabel Label, double? Value)[]
+        {
+            (lblGaugeCpu, cpu), (lblGaugeDisk, disk), (lblGaugeNet, net),
+        };
+        var top = gauges.Where(g => g.Value.HasValue).OrderByDescending(g => g.Value).FirstOrDefault();
+        _gaugeBoldFont ??= new Font(statusStrip.Font, FontStyle.Bold);
+        foreach (var (label, _) in gauges)
+        {
+            bool isBottleneck = ReferenceEquals(label, top.Label);
+            label.BorderSides = isBottleneck
+                ? ToolStripStatusLabelBorderSides.All
+                : ToolStripStatusLabelBorderSides.None;
+            label.Font = isBottleneck ? _gaugeBoldFont : statusStrip.Font;
+        }
+
+        _sessionStats?.AddSample(cpu, disk, net);
+
+        if (_throughput is not null)
+        {
+            long total = _completedOutputBytes;
+            foreach (var outputPath in _inFlightOutputs.Values)
+            {
+                try
+                {
+                    var info = new FileInfo(outputPath);
+                    if (info.Exists)
+                        total += info.Length;
+                }
+                catch (IOException) { }
+                catch (UnauthorizedAccessException) { }
+            }
+            double rate = _throughput.Update(total, _sessionClock.Elapsed.TotalSeconds);
+            lblGaugeRate.Text = $"{rate / (1024.0 * 1024.0):0.0} MB/s";
+        }
+        else
+        {
+            lblGaugeRate.Text = "– MB/s";
+        }
+    }
+
+    private static string FormatPercent(double? value) => value is double v ? $"{v:0}%" : "–";
 
     private void OnStop(object? sender, EventArgs e)
     {
@@ -217,7 +310,19 @@ public partial class MainForm : Form
                 Log($"found {started.TotalFiles} file(s)");
                 break;
 
+            case FileStartedEvent started when _runOutputRoot is not null:
+                try
+                {
+                    _inFlightOutputs[started.InputPath] =
+                        OutputPathMapper.Map(inputRoot, _runOutputRoot, started.InputPath);
+                }
+                catch (ArgumentException) { }
+                break;
+
             case FileFinishedEvent finished:
+                _inFlightOutputs.Remove(finished.Result.InputPath);
+                if (finished.Result.Succeeded)
+                    _completedOutputBytes += finished.Result.BytesOut;
                 LogFileResult(finished.Result, inputRoot);
                 progressBar.Value = Math.Min(finished.Processed, progressBar.Maximum);
                 lblCounter.Text = $"{finished.Processed}/{finished.TotalFiles}";

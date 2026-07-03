@@ -31,6 +31,10 @@ partial class MainForm
     private RichTextBox txtLog = null!;
     private StatusStrip statusStrip = null!;
     private ToolStripStatusLabel lblStatus = null!;
+    private ToolStripStatusLabel lblGaugeCpu = null!;
+    private ToolStripStatusLabel lblGaugeDisk = null!;
+    private ToolStripStatusLabel lblGaugeNet = null!;
+    private ToolStripStatusLabel lblGaugeRate = null!;
 
     protected override void Dispose(bool disposing)
     {
@@ -71,6 +75,10 @@ partial class MainForm
         txtLog = new RichTextBox();
         statusStrip = new StatusStrip();
         lblStatus = new ToolStripStatusLabel();
+        lblGaugeCpu = new ToolStripStatusLabel();
+        lblGaugeDisk = new ToolStripStatusLabel();
+        lblGaugeNet = new ToolStripStatusLabel();
+        lblGaugeRate = new ToolStripStatusLabel();
         grpMode.SuspendLayout();
         grpParallel.SuspendLayout();
         statusStrip.SuspendLayout();
@@ -303,16 +311,37 @@ partial class MainForm
         //
         // statusStrip
         //
-        statusStrip.Items.AddRange(new ToolStripItem[] { lblStatus });
+        statusStrip.Items.AddRange(new ToolStripItem[] { lblStatus, lblGaugeCpu, lblGaugeDisk, lblGaugeNet, lblGaugeRate });
         statusStrip.Location = new Point(0, 579);
         statusStrip.Name = "statusStrip";
+        statusStrip.ShowItemToolTips = true;
         statusStrip.Size = new Size(884, 22);
         //
         // lblStatus
         //
         lblStatus.Name = "lblStatus";
         lblStatus.Size = new Size(28, 17);
+        lblStatus.Spring = true;
         lblStatus.Text = "idle";
+        lblStatus.TextAlign = ContentAlignment.MiddleLeft;
+        //
+        // gauge labels (frame drawn around the current bottleneck via BorderSides)
+        //
+        lblGaugeCpu.BorderStyle = Border3DStyle.SunkenOuter;
+        lblGaugeCpu.Name = "lblGaugeCpu";
+        lblGaugeCpu.Text = "CPU –";
+        lblGaugeCpu.ToolTipText = "System-wide CPU utilization";
+        lblGaugeDisk.BorderStyle = Border3DStyle.SunkenOuter;
+        lblGaugeDisk.Name = "lblGaugeDisk";
+        lblGaugeDisk.Text = "DISK –";
+        lblGaugeDisk.ToolTipText = "Physical disk active time (all disks)";
+        lblGaugeNet.BorderStyle = Border3DStyle.SunkenOuter;
+        lblGaugeNet.Name = "lblGaugeNet";
+        lblGaugeNet.Text = "NET –";
+        lblGaugeNet.ToolTipText = "Network throughput as % of link speed";
+        lblGaugeRate.Name = "lblGaugeRate";
+        lblGaugeRate.Text = "– MB/s";
+        lblGaugeRate.ToolTipText = "Remux write throughput";
         //
         // MainForm
         //
