@@ -195,3 +195,34 @@ before running `gh repo create`.
       failure/cancel.
 - [ ] No text-scraping of mkvmerge output anywhere; JSON identify + exit codes only.
 - [ ] Repo committed in logical units with the layout of §1.
+
+---
+
+## 9. Status addendum (2026-07-03)
+
+The brief above is fully implemented and shipped; treat it as the original spec, and this
+section as the delta. Repo remote: `Haddoxx/mkv_hippo` (private). Releases: v0.1.0, v0.1.1
+(current), each with the self-contained `MKVHippo.exe` attached.
+
+Features added beyond the original spec (all engine logic tested; 101 tests green):
+
+- **Auto-scan on Start** when the current input folder hasn't been scanned yet.
+- **Dual-form language display** in scan reports (`[en / eng]` — filters match either form).
+- **Batch-level unmatched-filter warnings**: filter values that matched no track in any file
+  are reported after the run (suppressed after a Stop).
+- **Kept-track log summaries** per file (`kept a:eng s:all`) — `s:all` flags an accidentally
+  empty filter; filter placeholders read "empty = keep all".
+- **Destination overwrite policy**: Auto rename (default, Windows-style `name (1).mkv` via
+  `OutputPathMapper.MakeUnique`) or Overwrite; resolved paths flow through
+  `FileOutputResolvedEvent`.
+- **Resource gauges + bottleneck verdict**: status-bar CPU (`% Processor Utility` via PDH
+  English-name counters), disk active time, busiest-NIC network %, and MB/s throughput at
+  500 ms; per-session likely-bottleneck summary in the log (`ThroughputMeter`,
+  `BottleneckStats` in Core; `ResourceMonitor` in App).
+- **App icon** embedded (`src/MkvHippo.App/hippo.ico`); source artwork, 1024px master, SVG
+  trace and rebuild recipe live only in git history (commits `be6f40f`, `e1d8d23`, `468c914`).
+- Versioned title bar "MKV Hippo v<Version> by Haddoxx" — driven by `<Version>` in
+  `MkvHippo.App.csproj`.
+
+Release routine: bump `<Version>` in `src/MkvHippo.App/MkvHippo.App.csproj` → `dotnet test` →
+publish per §6 → copy to `dist/` → commit/push → `gh release create v<X.Y.Z> dist/MKVHippo.exe`.

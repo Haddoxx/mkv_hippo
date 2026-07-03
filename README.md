@@ -30,6 +30,11 @@ into a mirrored output tree — never touching your source files.
   a frame around whichever resource is currently the busiest. When a run finishes or is stopped, the log
   gets a session verdict, e.g. `likely bottleneck: NETWORK (avg 78%, peak 96%)`.
 
+## Download
+
+Grab `MKVHippo.exe` from the [latest release](https://github.com/Haddoxx/mkv_hippo/releases) —
+a self-contained single file, no .NET installation required.
+
 ## Requirements
 
 - Windows x64.
@@ -48,7 +53,9 @@ into a mirrored output tree — never touching your source files.
    - empty — keep all tracks of that type.
 4. **Scan** for an identify-only report grouped by track layout, or **Start** to process
    (Start scans first if the input folder hasn't been scanned yet).
-5. Adjust **Parallel files** (1–4) any time, even mid-batch. **Stop** cancels: pending files are
+5. Pick a **Destination overwrite** policy: *Auto rename* (default, never clobbers an existing
+   file) or *Overwrite*.
+6. Adjust **Parallel files** (1–4) any time, even mid-batch. **Stop** cancels: pending files are
    not started, running `mkvmerge` processes are killed and their partial outputs deleted.
 
 ## Screenshots
