@@ -4,15 +4,21 @@
   red bird companion.
 - `hippo_head_source.png` — the derived 1024×1024 icon master: bird removed, body
   erased below the chin, square crop auto-centered on the head with ~4% margins,
-  JPEG artifacts median-filtered, Lanczos-upscaled.
+  then upscaled with Real-ESRGAN (anime model).
 
-## Rebuilding the master (Pillow)
+## Rebuilding the master
 
-1. Paint the bird region `[12, 5, 94, 115]` with the flat background `(254, 229, 188)`.
+1. Paint the bird region `[12, 5, 94, 115]` with the flat background `(254, 229, 188)`
+  (Pillow).
 2. Flood-fill the chest pocket below the chin (seed `(150, 150)`, threshold 60), then
    erase all rows from y=127 down, plus the leg-line tick at `[127, 121, 139, 127]`.
 3. Compute the non-background bounding box, center it on a square canvas
-   (side = max dimension + 8%), median-filter 3×3, resize to 1024×1024 with Lanczos.
+   (side = max dimension + 8%) → a 184×184 cleaned square.
+4. Upscale with Real-ESRGAN `RealESRGAN_x4plus_anime_6B` (CPU is fine): two passes
+   of ×4 (184 → 736 → 2944), then Lanczos-downsample the supersampled result to
+   1024×1024. This preserves crisp line weight where plain Lanczos goes soft; color
+   vectorization (vtracer) was tried and rejected — at 184 px the outline strokes are
+   mostly anti-aliasing pixels and every palette-snap/trace distorted them.
 
 ## Building hippo.ico (ImageMagick)
 
