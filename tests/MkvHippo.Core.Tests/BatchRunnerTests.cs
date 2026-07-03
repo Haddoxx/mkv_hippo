@@ -104,7 +104,8 @@ public class BatchRunnerTests : IDisposable
 
         var finished = events.OfType<FileFinishedEvent>().ToList();
         Assert.Equal(3, finished.Count);
-        Assert.Contains(finished, e => e.Result.Outcome == FileOutcome.Ok && e.Result.RemovedAudio == 2);
+        Assert.Contains(finished, e => e.Result.Outcome == FileOutcome.Ok && e.Result.RemovedAudio == 2
+            && e.Result.KeptAudio == "eng" && e.Result.KeptSubtitles == "eng");
         Assert.Contains(finished, e => e.Result.Outcome == FileOutcome.SkippedClean);
         Assert.Contains(finished, e => e.Result.Outcome == FileOutcome.SkippedNoMatch
             && e.Result.Message!.Contains("audio filter"));

@@ -165,7 +165,9 @@ public sealed class BatchRunner
                     plan.RemovedAudio,
                     plan.RemovedSubtitles,
                     bytesIn,
-                    bytesOut);
+                    bytesOut,
+                    plan.KeptAudioSummary,
+                    plan.KeptSubtitleSummary);
         }
     }
 

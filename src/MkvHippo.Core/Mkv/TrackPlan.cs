@@ -68,7 +68,9 @@ public sealed record TrackPlan(
     bool KeepsAllSubtitles,
     int RemovedAudio,
     int RemovedSubtitles,
-    string? Warning)
+    string? Warning,
+    string KeptAudioSummary,
+    string KeptSubtitleSummary)
 {
     public static TrackPlan Create(MkvFileInfo file, PlanOptions options)
     {
@@ -100,7 +102,27 @@ public sealed record TrackPlan(
             keepsAllSubtitles,
             audio.Count - keptAudio.Count,
             subtitles.Count - keptSubtitles.Count,
-            warnings.Count > 0 ? string.Join("; ", warnings) : null);
+            warnings.Count > 0 ? string.Join("; ", warnings) : null,
+            SummarizeKept(keptAudio, audio.Count, options.Mode),
+            SummarizeKept(keptSubtitles, subtitles.Count, options.Mode));
+    }
+
+    /// <summary>
+    /// Compact description of what a plan keeps, for log lines: "all", "none",
+    /// "-" (file has no tracks of the type), or the kept languages/IDs.
+    /// An unexpected "all" is the tell-tale of an accidentally empty filter.
+    /// </summary>
+    private static string SummarizeKept(List<MkvTrack> kept, int totalOfType, FilterMode mode)
+    {
+        if (totalOfType == 0)
+            return "-";
+        if (kept.Count == totalOfType)
+            return "all";
+        if (kept.Count == 0)
+            return "none";
+        return mode == FilterMode.TrackIds
+            ? string.Join(",", kept.Select(t => t.Id).OrderBy(id => id))
+            : string.Join(",", kept.Select(t => t.LanguageTokens[0]));
     }
 
     private static List<MkvTrack> SelectKept(IReadOnlyList<MkvTrack> tracks, TrackFilter filter, FilterMode mode)

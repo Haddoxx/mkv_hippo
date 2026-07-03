@@ -155,6 +155,45 @@ public class TrackPlanTests
         Assert.Equal(PlanAction.SkipAlreadyClean, plan.Action);
     }
 
+    // --- Kept-track summaries (for log lines) ---
+
+    [Fact]
+    public void KeptSummariesListLanguagesInLanguageMode()
+    {
+        var plan = Plan("movie_multilang.json", FilterMode.Languages, "eng, jpn", "eng");
+        Assert.Equal("eng,jpn", plan.KeptAudioSummary);
+        Assert.Equal("eng", plan.KeptSubtitleSummary);
+    }
+
+    [Fact]
+    public void KeptSummariesShowAllForKeepAllFilters()
+    {
+        // The tell-tale for an accidentally empty filter box.
+        var plan = Plan("movie_multilang.json", FilterMode.Languages, "eng", "");
+        Assert.Equal("eng", plan.KeptAudioSummary);
+        Assert.Equal("all", plan.KeptSubtitleSummary);
+    }
+
+    [Fact]
+    public void KeptSummariesShowNoneForDropAllAndDashForAbsentTypes()
+    {
+        var dropAll = Plan("movie_multilang.json", FilterMode.Languages, "none", "none");
+        Assert.Equal("none", dropAll.KeptAudioSummary);
+        Assert.Equal("none", dropAll.KeptSubtitleSummary);
+
+        // eng-only fixture has no subtitle tracks at all.
+        var noSubs = Plan("movie_eng_only.json", FilterMode.Languages, "eng", "eng");
+        Assert.Equal("-", noSubs.KeptSubtitleSummary);
+    }
+
+    [Fact]
+    public void KeptSummariesListIdsInTrackIdMode()
+    {
+        var plan = Plan("movie_multilang.json", FilterMode.TrackIds, "2, 1", "4");
+        Assert.Equal("1,2", plan.KeptAudioSummary);
+        Assert.Equal("4", plan.KeptSubtitleSummary);
+    }
+
     // --- Matched-token reporting ---
 
     [Fact]

@@ -17,7 +17,9 @@ public sealed record FileResult(
     int RemovedAudio = 0,
     int RemovedSubtitles = 0,
     long BytesIn = 0,
-    long BytesOut = 0)
+    long BytesOut = 0,
+    string? KeptAudio = null,
+    string? KeptSubtitles = null)
 {
     public bool Succeeded => Outcome is FileOutcome.Ok or FileOutcome.OkWithWarnings;
     public bool Skipped => Outcome is FileOutcome.SkippedClean or FileOutcome.SkippedNoMatch;
