@@ -30,6 +30,16 @@ public partial class MainForm : Form
         var version = typeof(MainForm).Assembly.GetName().Version;
         Text = $"MKV Hippo v{version?.ToString(3) ?? "?"} by Haddoxx";
 
+        // The title-bar icon doesn't inherit from the exe's embedded icon automatically.
+        try
+        {
+            Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath);
+        }
+        catch (Exception)
+        {
+            // Missing/invalid icon resource: keep the default form icon.
+        }
+
         var gaugeTimer = new System.Windows.Forms.Timer(components) { Interval = 500 };
         gaugeTimer.Tick += OnGaugeTick;
         gaugeTimer.Start();
