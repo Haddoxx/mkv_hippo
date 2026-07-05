@@ -201,7 +201,7 @@ before running `gh repo create`.
 ## 9. Status addendum (2026-07-03)
 
 The brief above is fully implemented and shipped; treat it as the original spec, and this
-section as the delta. Repo remote: `Haddoxx/mkv_hippo` (private). Releases: v0.1.0, v0.1.1,
+section as the delta. Repo remote: `Haddoxx/mkv_hippo` (public). Releases: v0.1.0, v0.1.1,
 v0.1.2 (current), each with the self-contained `MKVHippo.exe` attached.
 
 Privacy posture (2026-07-05): commit history carries only `Haddoxx
