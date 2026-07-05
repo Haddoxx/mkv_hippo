@@ -1,0 +1,69 @@
+{
+  "attachments": [],
+  "chapters": [],
+  "container": {
+    "properties": {
+      "container_type": 25,
+      "is_providing_timestamps": true
+    },
+    "recognized": true,
+    "supported": true,
+    "type": "QuickTime/MP4"
+  },
+  "errors": [],
+  "file_name": "movie_mp4.mp4",
+  "global_tags": [],
+  "identification_format_version": 19,
+  "track_tags": [],
+  "tracks": [
+    {
+      "codec": "AVC/H.264/MPEG-4p10",
+      "id": 0,
+      "properties": {
+        "enabled_track": true,
+        "language": "und",
+        "number": 1,
+        "packetizer": "mpeg4_p10_video",
+        "pixel_dimensions": "1920x1080"
+      },
+      "type": "video"
+    },
+    {
+      "codec": "AAC",
+      "id": 1,
+      "properties": {
+        "audio_bits_per_sample": 16,
+        "audio_channels": 6,
+        "audio_sampling_frequency": 48000,
+        "enabled_track": true,
+        "language": "eng",
+        "number": 2
+      },
+      "type": "audio"
+    },
+    {
+      "codec": "AAC",
+      "id": 2,
+      "properties": {
+        "audio_bits_per_sample": 16,
+        "audio_channels": 2,
+        "audio_sampling_frequency": 48000,
+        "enabled_track": false,
+        "language": "jpn",
+        "number": 3
+      },
+      "type": "audio"
+    },
+    {
+      "codec": "Timed Text",
+      "id": 3,
+      "properties": {
+        "enabled_track": true,
+        "language": "eng",
+        "number": 4
+      },
+      "type": "subtitles"
+    }
+  ],
+  "warnings": []
+}

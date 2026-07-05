@@ -112,6 +112,38 @@ public class TrackPlanTests
     }
 
     [Fact]
+    public void Mp4KeepingEveryTrackStillRemuxesForContainerConversion()
+    {
+        // Same keep-everything situation as SkipAlreadyClean, but the source is not
+        // Matroska: the file must still be remuxed to become the .mkv output.
+        var plan = Plan("movie_mp4.json", FilterMode.Languages, "", "");
+
+        Assert.Equal(PlanAction.Remux, plan.Action);
+        Assert.True(plan.KeepsAllAudio);
+        Assert.True(plan.KeepsAllSubtitles);
+        Assert.Equal(0, plan.RemovedAudio);
+        Assert.Equal(0, plan.RemovedSubtitles);
+    }
+
+    [Fact]
+    public void Mp4TracksAreFilteredLikeMkvTracks()
+    {
+        var plan = Plan("movie_mp4.json", FilterMode.Languages, "eng", "eng");
+
+        Assert.Equal(PlanAction.Remux, plan.Action);
+        Assert.Equal(new[] { 1 }, plan.KeptAudioIds);
+        Assert.Equal(new[] { 3 }, plan.KeptSubtitleIds);
+        Assert.Equal(1, plan.RemovedAudio);
+    }
+
+    [Fact]
+    public void ZeroMatchSafetySkipAppliesToMp4Too()
+    {
+        var plan = Plan("movie_mp4.json", FilterMode.Languages, "ger", "eng");
+        Assert.Equal(PlanAction.SkipNoMatch, plan.Action);
+    }
+
+    [Fact]
     public void ZeroMatchAudioFilterSkipsWithWarning()
     {
         var plan = Plan("movie_multilang.json", FilterMode.Languages, "ger", "eng");

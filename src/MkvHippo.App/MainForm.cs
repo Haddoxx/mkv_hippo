@@ -54,7 +54,7 @@ public partial class MainForm : Form
 
     private void OnBrowseInput(object? sender, EventArgs e)
     {
-        using var dialog = new FolderBrowserDialog { Description = "Folder to scan for .mkv files" };
+        using var dialog = new FolderBrowserDialog { Description = "Folder to scan for .mkv / .mp4 / .m4v files" };
         if (dialog.ShowDialog(this) != DialogResult.OK)
             return;
 
@@ -346,23 +346,31 @@ public partial class MainForm : Form
     private void LogFileResult(FileResult result, string inputRoot)
     {
         var name = Relative(inputRoot, result.InputPath);
+        // Removing nothing happens only for non-MKV sources kept whole: a pure container conversion.
+        var action = result.RemovedAudio == 0 && result.RemovedSubtitles == 0
+            ? "converted to mkv"
+            : $"removed a:{result.RemovedAudio} s:{result.RemovedSubtitles}";
         // "kept s:all" is the tell-tale of an accidentally empty filter.
         var kept = result.KeptAudio is null ? ""
             : $", kept a:{result.KeptAudio} s:{result.KeptSubtitles}";
-        // Auto-rename kicked in: the destination file name differs from the source's.
-        if (result.OutputPath is not null
-            && !string.Equals(Path.GetFileName(result.OutputPath), Path.GetFileName(result.InputPath),
-                StringComparison.OrdinalIgnoreCase))
+        if (result.OutputPath is not null)
         {
-            kept += $", renamed → {Path.GetFileName(result.OutputPath)}";
+            // A changed stem means auto-rename kicked in; a changed extension alone is
+            // just the mp4 → mkv container conversion.
+            if (!string.Equals(Path.GetFileNameWithoutExtension(result.OutputPath),
+                    Path.GetFileNameWithoutExtension(result.InputPath), StringComparison.OrdinalIgnoreCase))
+                kept += $", renamed → {Path.GetFileName(result.OutputPath)}";
+            else if (!string.Equals(Path.GetExtension(result.OutputPath),
+                    Path.GetExtension(result.InputPath), StringComparison.OrdinalIgnoreCase))
+                kept += $" → {Path.GetFileName(result.OutputPath)}";
         }
         switch (result.Outcome)
         {
             case FileOutcome.Ok:
-                Log($"[ok] {name} — removed a:{result.RemovedAudio} s:{result.RemovedSubtitles}{kept}");
+                Log($"[ok] {name} — {action}{kept}");
                 break;
             case FileOutcome.OkWithWarnings:
-                Log($"[ok] {name} — removed a:{result.RemovedAudio} s:{result.RemovedSubtitles}{kept}");
+                Log($"[ok] {name} — {action}{kept}");
                 Log($"[warn] {name} — {result.Message}");
                 break;
             case FileOutcome.SkippedClean:

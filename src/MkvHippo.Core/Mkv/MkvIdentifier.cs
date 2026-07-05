@@ -62,10 +62,18 @@ public sealed record MkvTrack(
     public string LayoutKey => $"{Id}:{Type}:{Language ?? ""}:{LanguageIetf ?? ""}";
 }
 
-public sealed record MkvFileInfo(string FilePath, IReadOnlyList<MkvTrack> Tracks)
+public sealed record MkvFileInfo(string FilePath, IReadOnlyList<MkvTrack> Tracks, string? ContainerType = null)
 {
     public IReadOnlyList<MkvTrack> AudioTracks => Tracks.Where(t => t.Type == MkvTrackType.Audio).ToList();
     public IReadOnlyList<MkvTrack> SubtitleTracks => Tracks.Where(t => t.Type == MkvTrackType.Subtitles).ToList();
+
+    /// <summary>
+    /// True when the source container is affirmatively known not to be Matroska (e.g.
+    /// "QuickTime/MP4"): mkvmerge only writes Matroska, so even a file whose tracks are
+    /// all kept must be remuxed to become the .mkv output.
+    /// </summary>
+    public bool NeedsContainerConversion =>
+        ContainerType is not null && !ContainerType.Equals("Matroska", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Signature of the full track layout, for grouping files in scan reports.</summary>
     public string LayoutSignature =>
@@ -106,6 +114,13 @@ public sealed class MkvIdentifier
         var root = doc.RootElement;
         var tracks = new List<MkvTrack>();
 
+        string? containerType = null;
+        if (root.TryGetProperty("container", out var container) && container.ValueKind == JsonValueKind.Object
+            && container.TryGetProperty("type", out var containerTypeEl))
+        {
+            containerType = containerTypeEl.GetString();
+        }
+
         if (root.TryGetProperty("tracks", out var tracksEl) && tracksEl.ValueKind == JsonValueKind.Array)
         {
             foreach (var t in tracksEl.EnumerateArray())
@@ -135,7 +150,7 @@ public sealed class MkvIdentifier
             }
         }
 
-        return new MkvFileInfo(filePath, tracks);
+        return new MkvFileInfo(filePath, tracks, containerType);
     }
 
     private static string FirstLine(params string[] candidates)

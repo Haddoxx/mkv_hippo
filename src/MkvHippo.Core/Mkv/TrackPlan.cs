@@ -89,9 +89,11 @@ public sealed record TrackPlan(
         if (IsZeroMatch(subtitles, keptSubtitles, options.Subtitles))
             warnings.Add("subtitle filter matches none of the file's subtitle tracks");
 
+        // A non-Matroska source (e.g. MP4) is never "already clean": keeping every track
+        // still requires a remux to convert the container to .mkv.
         var action =
             warnings.Count > 0 ? PlanAction.SkipNoMatch :
-            keepsAllAudio && keepsAllSubtitles ? PlanAction.SkipAlreadyClean :
+            keepsAllAudio && keepsAllSubtitles && !file.NeedsContainerConversion ? PlanAction.SkipAlreadyClean :
             PlanAction.Remux;
 
         return new TrackPlan(

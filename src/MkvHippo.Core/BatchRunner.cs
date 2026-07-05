@@ -41,13 +41,16 @@ public sealed class BatchRunner
 
     public BatchRunner(IProcessRunner? runner = null) => _runner = runner ?? new ProcessRunner();
 
-    public static IReadOnlyList<string> FindMkvFiles(string root) =>
-        Directory.EnumerateFiles(root, "*.mkv", new EnumerationOptions
+    /// <summary>Extensions picked up by a scan or run. Non-MKV containers are remuxed to .mkv.</summary>
+    private static readonly string[] SourceExtensions = { ".mkv", ".mp4", ".m4v" };
+
+    public static IReadOnlyList<string> FindSourceFiles(string root) =>
+        Directory.EnumerateFiles(root, "*", new EnumerationOptions
         {
             RecurseSubdirectories = true,
-            MatchCasing = MatchCasing.CaseInsensitive,
             IgnoreInaccessible = true,
         })
+        .Where(p => SourceExtensions.Contains(Path.GetExtension(p), StringComparer.OrdinalIgnoreCase))
         .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
         .ToList();
 
@@ -60,7 +63,7 @@ public sealed class BatchRunner
         OutputPathMapper.EnsureValidRoots(options.InputRoot, options.OutputRoot);
 
         var stopwatch = Stopwatch.StartNew();
-        var files = FindMkvFiles(options.InputRoot);
+        var files = FindSourceFiles(options.InputRoot);
         progress?.Report(new BatchStartedEvent(files.Count));
 
         var identifier = new MkvIdentifier(_runner);
@@ -69,6 +72,23 @@ public sealed class BatchRunner
         var matchedAudioTokens = new HashSet<string>();
         var matchedSubtitleTokens = new HashSet<string>();
         int processed = 0;
+
+        // Distinct inputs can map to the same output name ("movie.mkv" + "movie.mp4" both
+        // yield "movie.mkv"), and parallel jobs may resolve before either file exists on
+        // disk — so auto-rename must also avoid names claimed by still-running jobs.
+        var reservedOutputs = new HashSet<string>(
+            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        string ResolveOutput(string mapped)
+        {
+            if (options.Overwrite != OverwriteBehavior.AutoRename)
+                return mapped;
+            lock (reservedOutputs)
+            {
+                var unique = OutputPathMapper.MakeUnique(mapped, reservedOutputs.Contains);
+                reservedOutputs.Add(unique);
+                return unique;
+            }
+        }
 
         void AccumulateMatches(MkvFileInfo info)
         {
@@ -90,6 +110,7 @@ public sealed class BatchRunner
                 try
                 {
                     result = await ProcessOneAsync(options, identifier, remuxer, file, AccumulateMatches,
+                        ResolveOutput,
                         output => progress?.Report(new FileOutputResolvedEvent(file, output)), jobCt)
                         .ConfigureAwait(false);
                 }
@@ -144,7 +165,8 @@ public sealed class BatchRunner
 
     private static async Task<FileResult> ProcessOneAsync(
         BatchOptions options, MkvIdentifier identifier, MkvRemuxer remuxer, string file,
-        Action<MkvFileInfo> onIdentified, Action<string> onOutputResolved, CancellationToken ct)
+        Action<MkvFileInfo> onIdentified, Func<string, string> resolveOutput,
+        Action<string> onOutputResolved, CancellationToken ct)
     {
         var info = await identifier.IdentifyAsync(options.MkvmergePath, file, ct).ConfigureAwait(false);
         onIdentified(info);
@@ -159,9 +181,7 @@ public sealed class BatchRunner
                 return new FileResult(file, FileOutcome.SkippedNoMatch, plan.Warning);
 
             default:
-                var outputPath = OutputPathMapper.Map(options.InputRoot, options.OutputRoot, file);
-                if (options.Overwrite == OverwriteBehavior.AutoRename)
-                    outputPath = OutputPathMapper.MakeUnique(outputPath);
+                var outputPath = resolveOutput(OutputPathMapper.Map(options.InputRoot, options.OutputRoot, file));
                 onOutputResolved(outputPath);
                 var remux = await remuxer.RemuxAsync(options.MkvmergePath, plan, file, outputPath, ct)
                     .ConfigureAwait(false);
@@ -193,7 +213,7 @@ public sealed class BatchRunner
         IProgress<ProgressEvent>? progress,
         CancellationToken ct)
     {
-        var files = FindMkvFiles(inputRoot);
+        var files = FindSourceFiles(inputRoot);
         progress?.Report(new BatchStartedEvent(files.Count));
 
         var identifier = new MkvIdentifier(_runner);

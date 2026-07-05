@@ -142,4 +142,23 @@ public class MkvIdentifierTests
         var info = MkvIdentifier.Parse("x.mkv", "{\"container\": {\"recognized\": true}}");
         Assert.Empty(info.Tracks);
     }
+
+    [Fact]
+    public void ParsesTheContainerType()
+    {
+        Assert.Equal("Matroska", Fixtures.Parse("movie_eng_only.json").ContainerType);
+        Assert.Equal("QuickTime/MP4", Fixtures.Parse("movie_mp4.json").ContainerType);
+    }
+
+    [Fact]
+    public void OnlyAnAffirmativelyForeignContainerNeedsConversion()
+    {
+        Assert.False(Fixtures.Parse("movie_eng_only.json").NeedsContainerConversion);
+        Assert.True(Fixtures.Parse("movie_mp4.json").NeedsContainerConversion);
+
+        // Unknown container type must not force pointless remuxes.
+        var unknown = MkvIdentifier.Parse("x.mkv", "{\"container\": {\"recognized\": true}}");
+        Assert.Null(unknown.ContainerType);
+        Assert.False(unknown.NeedsContainerConversion);
+    }
 }

@@ -2,7 +2,11 @@ namespace MkvHippo.Core;
 
 public static class OutputPathMapper
 {
-    /// <summary>Maps an input file to its output path, mirroring the relative subpath under the output root.</summary>
+    /// <summary>
+    /// Maps an input file to its output path, mirroring the relative subpath under the output
+    /// root. mkvmerge only writes Matroska, so a non-.mkv input (e.g. .mp4) maps to a .mkv
+    /// output name; inputs already named .mkv keep their file name byte-for-byte.
+    /// </summary>
     public static string Map(string inputRoot, string outputRoot, string inputFile)
     {
         var relative = Path.GetRelativePath(Path.GetFullPath(inputRoot), Path.GetFullPath(inputFile));
@@ -11,7 +15,10 @@ public static class OutputPathMapper
         {
             throw new ArgumentException($"\"{inputFile}\" is not under the input root \"{inputRoot}\".");
         }
-        return Path.GetFullPath(Path.Combine(outputRoot, relative));
+        var mapped = Path.GetFullPath(Path.Combine(outputRoot, relative));
+        return Path.GetExtension(mapped).Equals(".mkv", StringComparison.OrdinalIgnoreCase)
+            ? mapped
+            : Path.ChangeExtension(mapped, ".mkv");
     }
 
     /// <summary>True if <paramref name="child"/> equals or lies inside <paramref name="parent"/>.</summary>
@@ -33,10 +40,13 @@ public static class OutputPathMapper
     /// <summary>
     /// Windows-style collision avoidance: returns the path unchanged if it is free,
     /// otherwise "name (1).mkv", "name (2).mkv", … — the first that does not exist.
+    /// <paramref name="isReserved"/> lets callers also veto names that are merely claimed
+    /// (e.g. outputs of jobs still running that haven't created their file yet).
     /// </summary>
-    public static string MakeUnique(string path)
+    public static string MakeUnique(string path, Func<string, bool>? isReserved = null)
     {
-        if (!File.Exists(path))
+        bool taken(string p) => File.Exists(p) || (isReserved?.Invoke(p) ?? false);
+        if (!taken(path))
             return path;
         var directory = Path.GetDirectoryName(path) ?? "";
         var stem = Path.GetFileNameWithoutExtension(path);
@@ -44,7 +54,7 @@ public static class OutputPathMapper
         for (int n = 1; ; n++)
         {
             var candidate = Path.Combine(directory, $"{stem} ({n}){extension}");
-            if (!File.Exists(candidate))
+            if (!taken(candidate))
                 return candidate;
         }
     }

@@ -267,17 +267,97 @@ public class BatchRunnerTests : IDisposable
     }
 
     [Fact]
-    public void FindsMkvFilesRecursivelyAndCaseInsensitively()
+    public void FindsSourceFilesRecursivelyAndCaseInsensitively()
     {
         AddSourceFile("a.mkv");
         AddSourceFile("deep/nested/b.MKV");
-        AddSourceFile("deep/skipme.mp4");
+        AddSourceFile("deep/c.mp4");
+        AddSourceFile("d.M4V");
+        AddSourceFile("deep/skipme.srt");
+        AddSourceFile("notes.txt");
 
-        var files = BatchRunner.FindMkvFiles(_inputRoot);
+        var files = BatchRunner.FindSourceFiles(_inputRoot);
 
-        Assert.Equal(2, files.Count);
+        Assert.Equal(4, files.Count);
         Assert.Contains(files, f => f.EndsWith("a.mkv"));
         Assert.Contains(files, f => f.EndsWith("b.MKV"));
+        Assert.Contains(files, f => f.EndsWith("c.mp4"));
+        Assert.Contains(files, f => f.EndsWith("d.M4V"));
+    }
+
+    [Fact]
+    public async Task AlreadyCleanMp4IsStillRemuxedToMkvWhileACleanMkvIsSkipped()
+    {
+        AddSourceFile("clean.mkv");
+        AddSourceFile("clean.mp4");
+        var runner = MkvmergeEmulator(name =>
+            name == "clean.mp4" ? "movie_mp4.json" : "movie_eng_only.json");
+
+        // Keep-all filters: nothing to remove from either file.
+        var events = new List<ProgressEvent>();
+        var summary = await new BatchRunner(runner).RunAsync(
+            Options(audio: "", subs: ""), new AdaptiveScheduler(1),
+            new SynchronousProgress(events), CancellationToken.None);
+
+        Assert.Equal(1, summary.Succeeded);
+        Assert.Equal(1, summary.Skipped);
+        var finished = events.OfType<FileFinishedEvent>().ToList();
+        Assert.Contains(finished, e => e.Result.InputPath.EndsWith("clean.mkv")
+            && e.Result.Outcome == FileOutcome.SkippedClean);
+        Assert.Contains(finished, e => e.Result.InputPath.EndsWith("clean.mp4")
+            && e.Result.Outcome == FileOutcome.Ok
+            && e.Result.RemovedAudio == 0 && e.Result.RemovedSubtitles == 0
+            && e.Result.OutputPath!.EndsWith("clean.mkv"));
+
+        // The MP4 becomes an .mkv output via a pure container conversion: no selection flags.
+        var mp4Remux = Assert.Single(runner.Calls, c => c.Arguments.Contains("-o"));
+        Assert.EndsWith("clean.mp4", mp4Remux.Arguments[^1]);
+        Assert.DoesNotContain("-a", mp4Remux.Arguments);
+        Assert.DoesNotContain("-s", mp4Remux.Arguments);
+        Assert.DoesNotContain("--no-audio", mp4Remux.Arguments);
+        Assert.DoesNotContain("--no-subtitles", mp4Remux.Arguments);
+        Assert.Equal(new[] { "clean.mkv" },
+            Directory.GetFiles(_outputRoot).Select(Path.GetFileName).ToArray());
+    }
+
+    [Fact]
+    public async Task ParallelSourcesMappingToTheSameOutputNameAreAutoRenamedNotClobbered()
+    {
+        // movie.mkv and movie.mp4 both map to "movie.mkv" in the output tree.
+        AddSourceFile("movie.mkv");
+        AddSourceFile("movie.mp4");
+
+        // Hold both remuxes at their start until the other has also resolved its output
+        // path, so File.Exists alone cannot break the tie — only the in-flight
+        // reservation can. A stuck barrier fails the test instead of hanging it.
+        var bothRemuxing = new TaskCompletionSource();
+        int remuxes = 0;
+        var runner = new FakeProcessRunner
+        {
+            Handler = async (_, args, _) =>
+            {
+                if (args[0] == "-J")
+                {
+                    var fixture = args[1].EndsWith(".mp4") ? "movie_mp4.json" : "movie_multilang.json";
+                    return new ProcessResult(0, Fixtures.Json(fixture), "");
+                }
+                if (Interlocked.Increment(ref remuxes) == 2)
+                    bothRemuxing.SetResult();
+                await bothRemuxing.Task.WaitAsync(TimeSpan.FromSeconds(10));
+                var outputPath = args[args.ToList().IndexOf("-o") + 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+                File.WriteAllText(outputPath, "REMUXED");
+                return new ProcessResult(0, "", "");
+            },
+        };
+
+        var summary = await new BatchRunner(runner).RunAsync(
+            Options(), new AdaptiveScheduler(2), null, CancellationToken.None);
+
+        Assert.Equal(2, summary.Succeeded);
+        Assert.Equal(0, summary.Failed);
+        var outputs = Directory.GetFiles(_outputRoot).Select(Path.GetFileName).OrderBy(n => n).ToList();
+        Assert.Equal(new[] { "movie (1).mkv", "movie.mkv" }, outputs);
     }
 
     [Fact]

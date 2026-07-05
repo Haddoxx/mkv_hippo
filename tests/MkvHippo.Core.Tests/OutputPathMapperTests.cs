@@ -21,6 +21,22 @@ public class OutputPathMapperTests
     }
 
     [Fact]
+    public void MapsNonMkvInputsToAnMkvOutputName()
+    {
+        Assert.Equal(Path.Combine(Out, "movie.mkv"),
+            OutputPathMapper.Map(Root, Out, Path.Combine(Root, "movie.mp4")));
+        Assert.Equal(Path.Combine(Out, "shows", "e01.mkv"),
+            OutputPathMapper.Map(Root, Out, Path.Combine(Root, "shows", "e01.M4V")));
+    }
+
+    [Fact]
+    public void MapPreservesAnMkvFileNameExactlyIncludingCase()
+    {
+        Assert.Equal(Path.Combine(Out, "Movie.MKV"),
+            OutputPathMapper.Map(Root, Out, Path.Combine(Root, "Movie.MKV")));
+    }
+
+    [Fact]
     public void RefusesFileOutsideTheInputRoot()
     {
         Assert.Throws<ArgumentException>(
@@ -90,6 +106,26 @@ public class OutputPathMapperTests
             File.WriteAllText(Path.Combine(dir, "movie (1).mkv"), "x");
             File.WriteAllText(Path.Combine(dir, "movie (2).mkv"), "x");
             Assert.Equal(Path.Combine(dir, "movie (3).mkv"), OutputPathMapper.MakeUnique(path));
+        }
+        finally
+        {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void MakeUniqueAlsoAvoidsReservedNamesThatDoNotExistYet()
+    {
+        var dir = Path.Combine(Path.GetTempPath(), "hippo-unique-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try
+        {
+            var path = Path.Combine(dir, "movie.mkv");
+            var reserved = new HashSet<string> { path, Path.Combine(dir, "movie (1).mkv") };
+            File.WriteAllText(Path.Combine(dir, "movie (2).mkv"), "x");
+
+            Assert.Equal(Path.Combine(dir, "movie (3).mkv"),
+                OutputPathMapper.MakeUnique(path, reserved.Contains));
         }
         finally
         {
