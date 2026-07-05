@@ -1,9 +1,10 @@
 # MKV Hippo
 
-A Windows GUI tool that batch-removes unwanted audio and subtitle tracks from `.mkv` and `.mp4`
-files, losslessly, by driving [mkvmerge](https://mkvtoolnix.download/) from MKVToolNix. Point it
-at a folder tree, tell it which languages (or track IDs) to keep, and it remuxes every file
-underneath into a mirrored output tree — never touching your source files.
+What's all this then? Inspired by samehb/MKVStrip, MKV Hippo is a Windows GUI tool that batch-removes unwanted audio and subtitle tracks from `.mkv` and `.mp4` files, losslessly, by driving [mkvmerge](https://mkvtoolnix.download/) from MKVToolNix. Point it at a folder tree, tell it which languages (or track IDs) to keep, and it remuxes every file underneath into a mirrored output tree — never touching your source files.
+
+In this world of fast storage, it makes sense to have a tool that can (ideally) rip through multiple files at once, and also help you understand what the primary speed bottleneck is.
+
+Designed by myself; coded and built by Claude Fable 5 Max. Use it at your own risk!
 
 ## Features
 
@@ -62,10 +63,6 @@ a self-contained single file, no .NET installation required.
    file) or *Overwrite*.
 6. Adjust **Parallel files** (1–4) any time, even mid-batch. **Stop** cancels: pending files are
    not started, running `mkvmerge` processes are killed and their partial outputs deleted.
-
-## Screenshots
-
-*(coming soon)*
 
 ## Building from source
 
