@@ -198,18 +198,19 @@ before running `gh repo create`.
 
 ---
 
-## 9. Status addendum (2026-07-03)
+## 9. Status addendum (2026-07-03, updated 2026-07-05)
 
 The brief above is fully implemented and shipped; treat it as the original spec, and this
-section as the delta. Repo remote: `Haddoxx/mkv_hippo` (public). Releases: v0.1.0, v0.1.1,
-v0.1.2 (current), each with the self-contained `MKVHippo.exe` attached.
+section as the delta. Repo remote: `Haddoxx/mkv_hippo` — public, GPLv3 (`LICENSE`).
+Releases: v0.1.0, v0.1.1, v0.1.2 (current). Only v0.1.2 carries the self-contained
+`MKVHippo.exe`; its asset was rebuilt post-tag to include the higher-fidelity icon, and the
+older exes were deleted (pre-PathMap, embedded local paths).
 
 Privacy posture (2026-07-05): commit history carries only `Haddoxx
 <Haddoxx@users.noreply.github.com>` (names and emails rewritten; git config matches), and
 `Directory.Build.props` sets `PathMap` (checkout dir → `/src/`) plus `DebugType=embedded`
 for all assemblies — published binaries contain no local usernames or paths (verify with
-`strings` after a publish). The pre-PathMap v0.1.0/v0.1.1 exe assets were deleted from
-their releases; v0.1.2 is the earliest downloadable exe.
+`strings` after a publish).
 
 Features added beyond the original spec (all engine logic tested; 111 tests green):
 
