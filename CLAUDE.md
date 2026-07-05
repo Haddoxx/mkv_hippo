@@ -234,8 +234,10 @@ Features added beyond the original spec (all engine logic tested; 111 tests gree
   English-name counters), disk active time, busiest-NIC network %, and MB/s throughput at
   500 ms; per-session likely-bottleneck summary in the log (`ThroughputMeter`,
   `BottleneckStats` in Core; `ResourceMonitor` in App).
-- **App icon** embedded (`src/MkvHippo.App/hippo.ico`); source artwork, 1024px master, SVG
-  trace and rebuild recipe live only in git history (commits `be6f40f`, `e1d8d23`, `468c914`).
+- **App icon** embedded (`src/MkvHippo.App/hippo.ico`; 10 frames 16–256 incl. 96/128,
+  rebuilt 2026-07-05 with gamma-correct Lanczos + per-size unsharp from the 1024px master).
+  Source artwork, master, SVG trace and rebuild recipe live only in git history — locate
+  them with `git log --all -- icon/` (don't pin hashes; they change on history rewrites).
 - Versioned title bar "MKV Hippo v<Version> by Haddoxx" — driven by `<Version>` in
   `MkvHippo.App.csproj`.
 
