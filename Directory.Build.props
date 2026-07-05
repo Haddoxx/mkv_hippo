@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <!-- Strip the local checkout path from compiled binaries: embedded PDBs and
+         stack traces show /src/... instead of the builder's home directory. -->
+    <PathMap>$(MSBuildThisFileDirectory)=/src/</PathMap>
+    <!-- Embed PDBs in every assembly so published stack traces carry file/line
+         info for both the app and the engine. -->
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+</Project>
