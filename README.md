@@ -85,3 +85,7 @@ The self-contained single-file binary lands in
 - `src/MkvHippo.App` — WinForms shell (`net8.0-windows`).
 - `tests/MkvHippo.Core.Tests` — xunit tests, including `mkvmerge -J` fixtures under
   `tests/fixtures/`.
+
+## License
+
+[GPLv3](LICENSE).
