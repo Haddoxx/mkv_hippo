@@ -204,8 +204,16 @@ The brief above is fully implemented and shipped; treat it as the original spec,
 section as the delta. Repo remote: `Haddoxx/mkv_hippo` (private). Releases: v0.1.0, v0.1.1
 (current), each with the self-contained `MKVHippo.exe` attached.
 
-Features added beyond the original spec (all engine logic tested; 101 tests green):
+Features added beyond the original spec (all engine logic tested; 111 tests green):
 
+- **MP4/M4V input** (2026-07-05): discovery accepts `.mkv`/`.mp4`/`.m4v`; the output is always
+  `.mkv` (`OutputPathMapper.Map` swaps the extension — mkvmerge only writes Matroska).
+  Non-Matroska sources are detected from `container.type` in the `-J` JSON
+  (`MkvFileInfo.NeedsContainerConversion`), never from the extension, and always remux —
+  an "already clean" MP4 becomes a pure container conversion (logged "converted to mkv").
+  Same-stem collisions (`movie.mkv` + `movie.mp4` → both map to `movie.mkv`) are resolved
+  race-free under AutoRename via in-flight output reservation in `BatchRunner`
+  (`MakeUnique` takes an `isReserved` predicate).
 - **Auto-scan on Start** when the current input folder hasn't been scanned yet.
 - **Dual-form language display** in scan reports (`[en / eng]` — filters match either form).
 - **Batch-level unmatched-filter warnings**: filter values that matched no track in any file

@@ -1,17 +1,22 @@
 # MKV Hippo
 
-A Windows GUI tool that batch-removes unwanted audio and subtitle tracks from `.mkv` files,
-losslessly, by driving [mkvmerge](https://mkvtoolnix.download/) from MKVToolNix. Point it at a
-folder tree, tell it which languages (or track IDs) to keep, and it remuxes every MKV underneath
-into a mirrored output tree — never touching your source files.
+A Windows GUI tool that batch-removes unwanted audio and subtitle tracks from `.mkv` and `.mp4`
+files, losslessly, by driving [mkvmerge](https://mkvtoolnix.download/) from MKVToolNix. Point it
+at a folder tree, tell it which languages (or track IDs) to keep, and it remuxes every file
+underneath into a mirrored output tree — never touching your source files.
 
 ## Features
 
-- **Recursive batch processing** — scans an entire directory tree for `.mkv` files.
+- **Recursive batch processing** — scans an entire directory tree for `.mkv`, `.mp4` and
+  `.m4v` files.
+- **MP4 input** — MP4/M4V sources are filtered exactly like MKVs, but the output is always
+  `.mkv` (mkvmerge only writes Matroska). An MP4 whose tracks all match your filters is
+  therefore not skipped: it is still losslessly converted to MKV. Note that MP4s often carry
+  no language tags — such tracks match the filter value `und`.
 - **Language or Track-ID filtering** — keep audio/subtitle tracks by language code
   (`eng, jpn`), by mkvmerge track ID, drop all of a type (`none`), or keep all (leave blank).
 - **Identify-first** — every file's real track layout is read via `mkvmerge -J` before any
-  decision; files that already match your filters are skipped ("already clean"), and filters
+  decision; MKVs that already match your filters are skipped ("already clean"), and filters
   matching zero tracks skip with a warning instead of producing a silent file. Starting a batch
   on a folder you haven't scanned yet runs the scan automatically first.
 - **Filter feedback** — scan lines show both language forms when they differ (e.g.
