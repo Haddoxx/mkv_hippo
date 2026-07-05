@@ -32,7 +32,7 @@ it end-to-end, build the final binary, and leave the repo in a committed, workin
 ```
 mkv-hippo/
 ├── CLAUDE.md                  (this file)
-├── README.md                  (usage, screenshots section stubbed, build instructions)
+├── README.md                  (usage, build instructions)
 ├── .gitignore                 (standard dotnet: bin/, obj/, *.user, publish/)
 ├── MkvHippo.sln
 ├── src/
