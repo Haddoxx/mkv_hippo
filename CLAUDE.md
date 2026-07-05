@@ -208,8 +208,8 @@ Privacy posture (2026-07-05): commit history carries only `Haddoxx
 <Haddoxx@users.noreply.github.com>` (names and emails rewritten; git config matches), and
 `Directory.Build.props` sets `PathMap` (checkout dir → `/src/`) plus `DebugType=embedded`
 for all assemblies — published binaries contain no local usernames or paths (verify with
-`strings` after a publish). The v0.1.0/v0.1.1 release assets predate the PathMap and still
-embed the old build path.
+`strings` after a publish). The pre-PathMap v0.1.0/v0.1.1 exe assets were deleted from
+their releases; v0.1.2 is the earliest downloadable exe.
 
 Features added beyond the original spec (all engine logic tested; 111 tests green):
 
