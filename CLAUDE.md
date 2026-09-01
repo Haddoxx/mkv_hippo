@@ -242,5 +242,36 @@ Features added beyond the original spec (all engine logic tested; 111 tests gree
 - Versioned title bar "MKV Hippo v<Version> by Haddoxx" — driven by `<Version>` in
   `MkvHippo.App.csproj`.
 
+### v0.1.3 (2026-09-01) — destination-lifecycle and shutdown fixes
+
+From a code review of v0.1.2; all five findings plus one adjacent race. 124 tests green.
+
+- **Muxes write to a working file, never straight to the destination.** mkvmerge truncates its
+  `-o` target on open, so under *Overwrite* a failure or a Stop destroyed the previous output
+  before anything could be salvaged. `MkvRemuxer` now muxes to
+  `<dest>.<token>.mkvhippo-tmp` in the destination directory and `File.Move(overwrite: true)`s
+  it into place only on exit 0/1; failure and cancellation delete the working file and leave
+  the destination untouched. `FileOutputResolvedEvent` gained `WorkingPath` so the throughput
+  gauge measures the file that is actually growing.
+- **Same-destination sources are settled before dispatch under *Overwrite*.** Auto rename
+  already reserved unique names; Overwrite had no such path, so `movie.mkv` + `movie.mp4`
+  raced. `BatchRunner` now pre-computes destinations: first in scan order wins, the rest get
+  `FileOutcome.SkippedCollision` naming the winner.
+- **`ProcessRunner` only treats a process it actually killed as cancelled.** Previously a mux
+  that finished microseconds before Stop threw `OperationCanceledException` and its finished
+  output was deleted.
+- **`BatchRunner` owns cancellation.** `RunAsync`/`ScanAsync` link their `ct` with
+  `AdaptiveScheduler.Token` (new), register `AdaptiveScheduler.CancelPending()` (new) to drop
+  the queue, stop the enqueue loop, and pass the linked token to jobs — so cancelling either
+  token works, in both directions, and `WasCancelled` reflects both.
+- **Closing the window mid-batch cancels.** `MainForm.OnFormClosing` cancels `_cts` and defers
+  the close (15 s bound; a second click forces it) instead of orphaning `mkvmerge` children.
+- **`MkvTrack.LayoutKey` includes the codec**, which the scan report prints — differing codecs
+  no longer collapse into one layout group shown under the first file's codec.
+
+Verified against real mkvmerge on Linux via a throwaway harness over `MkvHippo.Core`
+(auto-rename, overwrite collision, write failure, mid-mux Stop): destinations preserved, no
+`.mkvhippo-tmp` leftovers, no orphaned children. The WinForms close path is compile-only here.
+
 Release routine: bump `<Version>` in `src/MkvHippo.App/MkvHippo.App.csproj` → `dotnet test` →
 publish per §6 → copy to `dist/` → commit/push → `gh release create v<X.Y.Z> dist/MKVHippo.exe`.

@@ -29,7 +29,13 @@ Designed by myself; coded and built by Claude Fable 5 Max. Use it at your own ri
 - **Lossless** — pure remux, no re-encoding. Sources are never modified.
 - **Destination overwrite policy** — by default an existing destination file is never
   clobbered: the new output is written as `name (1).mkv` (then `(2)`, …) and the rename is
-  noted in the log. Select *Overwrite* to replace existing files instead.
+  noted in the log. Select *Overwrite* to replace existing files instead. Under *Overwrite*,
+  two sources that would land on the same destination (`movie.mkv` and `movie.mp4` both map
+  to `movie.mkv`) are not raced: the first keeps the name and the rest are skipped with a
+  warning. Auto rename gives them both an output.
+- **Crash-safe writes** — every mux goes to a temporary file next to its destination and is
+  moved into place only once mkvmerge reports success, so a failure, a *Stop*, or a mid-run
+  close leaves an existing destination file exactly as it was.
 - **Bottleneck gauges** — the status bar shows system CPU utilization (Task Manager's
   frequency-normalized metric), disk active time, the busiest network adapter's share of its
   link speed, and the current remux write throughput (MB/s), refreshed twice a second, with
@@ -63,6 +69,7 @@ a self-contained single file, no .NET installation required.
    file) or *Overwrite*.
 6. Adjust **Parallel files** (1–4) any time, even mid-batch. **Stop** cancels: pending files are
    not started, running `mkvmerge` processes are killed and their partial outputs deleted.
+   Closing the window mid-batch does the same and waits for the jobs to stop before exiting.
 
 ## Building from source
 
