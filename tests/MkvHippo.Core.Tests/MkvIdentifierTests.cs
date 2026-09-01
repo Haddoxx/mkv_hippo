@@ -88,6 +88,20 @@ public class MkvIdentifierTests
     }
 
     [Fact]
+    public void LayoutSignatureSeparatesLayoutsThatDifferOnlyByCodec()
+    {
+        // Same IDs, types and languages; different codecs. The scan report prints the codec
+        // of the group's first file, so these must not be reported as one layout.
+        var aac = new MkvTrack(1, MkvTrackType.Audio, "eng", "en", "AAC");
+        var dts = aac with { Codec = "DTS" };
+        var a = new MkvFileInfo("a.mkv", new[] { aac });
+        var b = new MkvFileInfo("b.mkv", new[] { dts });
+
+        Assert.NotEqual(a.LayoutSignature, b.LayoutSignature);
+        Assert.Equal(a.LayoutSignature, new MkvFileInfo("c.mkv", new[] { aac }).LayoutSignature);
+    }
+
+    [Fact]
     public async Task IdentifyAsyncRunsMkvmergeWithJsonFlagAndParses()
     {
         var runner = new FakeProcessRunner

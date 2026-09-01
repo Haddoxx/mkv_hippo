@@ -59,7 +59,12 @@ public sealed record MkvTrack(
         }
     }
 
-    public string LayoutKey => $"{Id}:{Type}:{Language ?? ""}:{LanguageIetf ?? ""}";
+    /// <summary>
+    /// Grouping signature for scan reports. Includes the codec because the report prints it:
+    /// without it, files whose IDs and languages line up but whose codecs differ (AAC vs DTS)
+    /// would share a group and all be shown under the first file's codec.
+    /// </summary>
+    public string LayoutKey => $"{Id}:{Type}:{Language ?? ""}:{LanguageIetf ?? ""}:{Codec ?? ""}";
 }
 
 public sealed record MkvFileInfo(string FilePath, IReadOnlyList<MkvTrack> Tracks, string? ContainerType = null)
