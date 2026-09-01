@@ -22,6 +22,7 @@ public partial class MainForm : Form
     private BottleneckStats? _sessionStats;
     private ThroughputMeter? _throughput;
     private long _completedOutputBytes;
+    private bool _closing;
 
     public MainForm()
     {
@@ -43,11 +44,39 @@ public partial class MainForm : Form
         var gaugeTimer = new System.Windows.Forms.Timer(components) { Interval = 500 };
         gaugeTimer.Tick += OnGaugeTick;
         gaugeTimer.Start();
+        FormClosing += OnFormClosing;
         FormClosed += (_, _) =>
         {
             _monitor.Dispose();
             _gaugeBoldFont?.Dispose();
         };
+    }
+
+    /// <summary>
+    /// Closing mid-batch has to cancel: nothing else kills the child mkvmerge processes, and
+    /// without it they outlive the UI as orphans with their working files left behind. Defer
+    /// the close until the run has drained, with a bound so a wedged child can't trap the user
+    /// (clicking the close button again during the wait also forces it through).
+    /// </summary>
+    private async void OnFormClosing(object? sender, FormClosingEventArgs e)
+    {
+        if (!_busy || _closing)
+            return;
+
+        e.Cancel = true;
+        _closing = true;
+        if (_cts is { IsCancellationRequested: false })
+        {
+            Log("[warn] closing — stopping active jobs");
+            _cts.Cancel();
+        }
+        lblStatus.Text = "closing: waiting for jobs to stop…";
+
+        var deadline = DateTime.UtcNow.AddSeconds(15);
+        while (_busy && DateTime.UtcNow < deadline)
+            await Task.Delay(100);
+
+        Close();
     }
 
     // --- Folder pickers ---
@@ -322,7 +351,9 @@ public partial class MainForm : Form
                 break;
 
             case FileOutputResolvedEvent resolved:
-                _inFlightOutputs[resolved.InputPath] = resolved.OutputPath;
+                // The working file is the one growing on disk; the destination only appears
+                // once the mux has succeeded and been moved into place.
+                _inFlightOutputs[resolved.InputPath] = resolved.WorkingPath;
                 break;
 
             case FileFinishedEvent finished:
@@ -377,6 +408,7 @@ public partial class MainForm : Form
                 Log($"[skip] {name} — already clean");
                 break;
             case FileOutcome.SkippedNoMatch:
+            case FileOutcome.SkippedCollision:
                 Log($"[warn] {name} — skipped: {result.Message}");
                 break;
             case FileOutcome.Cancelled:
