@@ -100,34 +100,127 @@ public class MkvRemuxerTests : IDisposable
     // --- RemuxAsync behaviour ---
 
     [Fact]
-    public async Task RemuxAsyncPassesPlanArgumentsToMkvmerge()
+    public async Task RemuxAsyncMuxesToAWorkingFileThenMovesItOntoTheDestination()
     {
-        var runner = new FakeProcessRunner();
+        string? reportedWorkingPath = null;
+        var runner = WritingRunner("MUXED");
         var remuxer = new MkvRemuxer(runner);
         var plan = PlanFor("movie_multilang.json", "eng", "none");
         var output = Path.Combine(_tempDir, "sub", "out.mkv");
 
-        var result = await remuxer.RemuxAsync("mkvmerge", plan, "in.mkv", output, CancellationToken.None);
+        var result = await remuxer.RemuxAsync("mkvmerge", plan, "in.mkv", output, CancellationToken.None,
+            working => reportedWorkingPath = working);
 
         Assert.Equal(RemuxStatus.Ok, result.Status);
         var call = Assert.Single(runner.Calls);
-        Assert.Equal(new[] { "--quiet", "-o", output, "-a", "1", "--no-subtitles", "in.mkv" }, call.Arguments);
-        Assert.True(Directory.Exists(Path.GetDirectoryName(output)), "output directory must be created");
+
+        // mkvmerge is pointed at the working file, never at the destination itself.
+        var muxTarget = call.Arguments[call.Arguments.ToList().IndexOf("-o") + 1];
+        Assert.NotEqual(output, muxTarget);
+        Assert.EndsWith(MkvRemuxer.WorkingSuffix, muxTarget);
+        Assert.Equal(Path.GetDirectoryName(output), Path.GetDirectoryName(muxTarget));
+        Assert.Equal(muxTarget, reportedWorkingPath);
+        Assert.Equal(new[] { "--quiet", "-o", muxTarget, "-a", "1", "--no-subtitles", "in.mkv" }, call.Arguments);
+
+        // …and only the destination survives.
+        Assert.Equal("MUXED", File.ReadAllText(output));
+        Assert.Empty(WorkingFiles(Path.GetDirectoryName(output)!));
     }
 
     [Fact]
-    public async Task CancellationDeletesPartialOutputAndPropagates()
+    public async Task FailureLeavesAPreExistingDestinationIntact()
     {
-        var output = TempFile("cancelled.mkv");
+        var output = TempFile("keepme.mkv", "PRECIOUS");
+        var runner = WritingRunner("HALF-WRITTEN", exitCode: 2, stdErr: "Error: the muxing went wrong\n");
+        var remuxer = new MkvRemuxer(runner);
+        var plan = PlanFor("movie_multilang.json", "eng", "");
+
+        var result = await remuxer.RemuxAsync("mkvmerge", plan, "in.mkv", output, CancellationToken.None);
+
+        Assert.Equal(RemuxStatus.Failed, result.Status);
+        Assert.Equal("PRECIOUS", File.ReadAllText(output));
+        Assert.Empty(WorkingFiles(_tempDir));
+    }
+
+    [Fact]
+    public async Task CancellationLeavesAPreExistingDestinationIntactAndPropagates()
+    {
+        var output = TempFile("keepme.mkv", "PRECIOUS");
         var runner = new FakeProcessRunner
         {
-            Handler = (_, _, _) => throw new OperationCanceledException(),
+            Handler = (_, args, _) =>
+            {
+                // mkvmerge got as far as creating its working file before the kill landed.
+                File.WriteAllText(args[args.ToList().IndexOf("-o") + 1], "HALF-WRITTEN");
+                throw new OperationCanceledException();
+            },
         };
         var remuxer = new MkvRemuxer(runner);
         var plan = PlanFor("movie_multilang.json", "eng", "");
 
         await Assert.ThrowsAsync<OperationCanceledException>(
             () => remuxer.RemuxAsync("mkvmerge", plan, "in.mkv", output, CancellationToken.None));
-        Assert.False(File.Exists(output), "cancellation must delete the partial output file");
+
+        Assert.Equal("PRECIOUS", File.ReadAllText(output));
+        Assert.Empty(WorkingFiles(_tempDir));
     }
+
+    [Fact]
+    public async Task SuccessReplacesAPreExistingDestination()
+    {
+        var output = TempFile("replaceme.mkv", "OLD");
+        var remuxer = new MkvRemuxer(WritingRunner("NEW"));
+        var plan = PlanFor("movie_multilang.json", "eng", "");
+
+        var result = await remuxer.RemuxAsync("mkvmerge", plan, "in.mkv", output, CancellationToken.None);
+
+        Assert.Equal(RemuxStatus.Ok, result.Status);
+        Assert.Equal("NEW", File.ReadAllText(output));
+        Assert.Empty(WorkingFiles(_tempDir));
+    }
+
+    [Fact]
+    public async Task WarningsStillCommitTheWorkingFile()
+    {
+        var output = Path.Combine(_tempDir, "warned.mkv");
+        var remuxer = new MkvRemuxer(WritingRunner("MUXED", exitCode: 1, stdErr: "Warning: cues are missing\n"));
+        var plan = PlanFor("movie_multilang.json", "eng", "");
+
+        var result = await remuxer.RemuxAsync("mkvmerge", plan, "in.mkv", output, CancellationToken.None);
+
+        Assert.Equal(RemuxStatus.OkWithWarnings, result.Status);
+        Assert.Contains("cues are missing", result.Warnings);
+        Assert.Equal("MUXED", File.ReadAllText(output));
+        Assert.Empty(WorkingFiles(_tempDir));
+    }
+
+    [Fact]
+    public void WorkingPathsAreUniquePerCallAndSitNextToTheDestination()
+    {
+        var output = Path.Combine(_tempDir, "out.mkv");
+        var first = MkvRemuxer.WorkingPathFor(output);
+        var second = MkvRemuxer.WorkingPathFor(output);
+
+        Assert.NotEqual(first, second);
+        Assert.Equal(_tempDir, Path.GetDirectoryName(first));
+        Assert.EndsWith(MkvRemuxer.WorkingSuffix, first);
+    }
+
+    /// <summary>Emulates mkvmerge writing its -o target, then exiting with the given code.</summary>
+    private static FakeProcessRunner WritingRunner(string content, int exitCode = 0, string stdErr = "")
+    {
+        return new FakeProcessRunner
+        {
+            Handler = (_, args, _) =>
+            {
+                var target = args[args.ToList().IndexOf("-o") + 1];
+                Directory.CreateDirectory(Path.GetDirectoryName(target)!);
+                File.WriteAllText(target, content);
+                return Task.FromResult(new ProcessResult(exitCode, "", stdErr));
+            },
+        };
+    }
+
+    private static string[] WorkingFiles(string directory) =>
+        Directory.GetFiles(directory, "*" + MkvRemuxer.WorkingSuffix);
 }
