@@ -30,6 +30,9 @@ public sealed class AdaptiveScheduler
     /// <summary>Fires when a job throws anything other than <see cref="OperationCanceledException"/>.</summary>
     public event Action<Exception>? JobFailed;
 
+    /// <summary>The token every dispatched job receives. Callers link their own token to it.</summary>
+    public CancellationToken Token => _ct;
+
     public int Target
     {
         get { lock (_gate) return _target; }
@@ -63,6 +66,21 @@ public sealed class AdaptiveScheduler
             _pending.Enqueue(job);
         }
         TryDispatch();
+    }
+
+    /// <summary>
+    /// Drops everything still queued without touching running jobs. Cancelling the scheduler's
+    /// own token does this implicitly; this is the hook for a caller whose cancellation token
+    /// is a different one.
+    /// </summary>
+    public void CancelPending()
+    {
+        lock (_gate)
+        {
+            _pending.Clear();
+        }
+        TryDispatch(); // nothing left to start: releases the idle waiter once jobs have drained
+        StateChanged?.Invoke();
     }
 
     /// <summary>Completes once no job is running and nothing is pending.</summary>

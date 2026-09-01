@@ -361,6 +361,122 @@ public class BatchRunnerTests : IDisposable
     }
 
     [Fact]
+    public async Task OverwriteModeSkipsSourcesThatWouldFightOverOneDestination()
+    {
+        // movie.mkv and movie.mp4 both map to "movie.mkv", and Overwrite has no rename to
+        // separate them. The first in scan order wins; the other is skipped, not raced.
+        AddSourceFile("movie.mkv");
+        AddSourceFile("movie.mp4");
+        var runner = MkvmergeEmulator(name =>
+            name.EndsWith(".mp4") ? "movie_mp4.json" : "movie_multilang.json");
+
+        var events = new List<ProgressEvent>();
+        var summary = await new BatchRunner(runner).RunAsync(
+            Options(overwrite: OverwriteBehavior.Overwrite), new AdaptiveScheduler(4),
+            new SynchronousProgress(events), CancellationToken.None);
+
+        Assert.Equal(1, summary.Succeeded);
+        Assert.Equal(1, summary.Skipped);
+        Assert.Equal(0, summary.Failed);
+
+        var skipped = Assert.Single(events.OfType<FileFinishedEvent>()
+            .Where(e => e.Result.Outcome == FileOutcome.SkippedCollision));
+        Assert.EndsWith("movie.mp4", skipped.Result.InputPath);
+        Assert.Contains("movie.mkv", skipped.Result.Message);
+
+        // Exactly one destination, written exactly once, and no working file left behind.
+        Assert.Equal(new[] { "movie.mkv" },
+            Directory.GetFiles(_outputRoot).Select(Path.GetFileName).ToArray());
+        Assert.Single(runner.Calls, c => c.Arguments.Contains("-o"));
+    }
+
+    [Fact]
+    public async Task AutoRenameStillProducesBothOutputsForTheSameCollision()
+    {
+        AddSourceFile("movie.mkv");
+        AddSourceFile("movie.mp4");
+        var runner = MkvmergeEmulator(name =>
+            name.EndsWith(".mp4") ? "movie_mp4.json" : "movie_multilang.json");
+
+        var summary = await new BatchRunner(runner).RunAsync(
+            Options(overwrite: OverwriteBehavior.AutoRename), new AdaptiveScheduler(4),
+            null, CancellationToken.None);
+
+        Assert.Equal(2, summary.Succeeded);
+        Assert.Equal(0, summary.Skipped);
+        Assert.Equal(new[] { "movie (1).mkv", "movie.mkv" },
+            Directory.GetFiles(_outputRoot).Select(Path.GetFileName).OrderBy(n => n).ToArray());
+    }
+
+    [Fact]
+    public async Task CancellingOnlyTheTokenPassedToRunAsyncStopsProcessing()
+    {
+        for (int i = 0; i < 12; i++)
+            AddSourceFile($"movie{i:00}.mkv");
+
+        // The scheduler gets its own (never-cancelled) token, exactly as a core-library caller
+        // that only holds the RunAsync token would leave it.
+        var scheduler = new AdaptiveScheduler(1);
+        using var cts = new CancellationTokenSource();
+        int remuxes = 0;
+        var runner = new FakeProcessRunner
+        {
+            Handler = (_, args, jobCt) =>
+            {
+                if (args[0] == "-J")
+                    return Task.FromResult(new ProcessResult(0, Fixtures.Json("movie_multilang.json"), ""));
+                if (Interlocked.Increment(ref remuxes) == 1)
+                    cts.Cancel();
+                jobCt.ThrowIfCancellationRequested();
+                var outputPath = args[args.ToList().IndexOf("-o") + 1];
+                File.WriteAllText(outputPath, "REMUXED");
+                return Task.FromResult(new ProcessResult(0, "", ""));
+            },
+        };
+
+        var summary = await new BatchRunner(runner).RunAsync(
+            Options(), scheduler, null, cts.Token);
+
+        Assert.True(summary.WasCancelled);
+        Assert.Equal(12, summary.TotalFiles);
+        Assert.Equal(0, summary.Succeeded);
+        Assert.Equal(1, remuxes);
+        Assert.Equal(12, summary.Cancelled);
+        Assert.Empty(Directory.Exists(_outputRoot)
+            ? Directory.GetFiles(_outputRoot, "*", SearchOption.AllDirectories)
+            : Array.Empty<string>());
+    }
+
+    [Fact]
+    public async Task CancellingOnlyTheTokenPassedToScanAsyncStopsIdentifying()
+    {
+        for (int i = 0; i < 12; i++)
+            AddSourceFile($"movie{i:00}.mkv");
+
+        var scheduler = new AdaptiveScheduler(1);
+        using var cts = new CancellationTokenSource();
+        int identifies = 0;
+        var runner = new FakeProcessRunner
+        {
+            Handler = (_, _, jobCt) =>
+            {
+                if (Interlocked.Increment(ref identifies) == 1)
+                    cts.Cancel();
+                jobCt.ThrowIfCancellationRequested();
+                return Task.FromResult(new ProcessResult(0, Fixtures.Json("movie_multilang.json"), ""));
+            },
+        };
+
+        var report = await new BatchRunner(runner).ScanAsync(
+            _inputRoot, "mkvmerge", scheduler, null, cts.Token);
+
+        Assert.True(report.WasCancelled);
+        Assert.Equal(12, report.TotalFiles);
+        Assert.Equal(1, identifies);
+        Assert.Empty(report.Groups);
+    }
+
+    [Fact]
     public async Task ScanGroupsFilesByIdenticalTrackLayout()
     {
         AddSourceFile("s01/e01.mkv");

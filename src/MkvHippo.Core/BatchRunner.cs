@@ -44,6 +44,9 @@ public sealed class BatchRunner
     /// <summary>Extensions picked up by a scan or run. Non-MKV containers are remuxed to .mkv.</summary>
     private static readonly string[] SourceExtensions = { ".mkv", ".mp4", ".m4v" };
 
+    private static StringComparer PathComparer =>
+        OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
+
     public static IReadOnlyList<string> FindSourceFiles(string root) =>
         Directory.EnumerateFiles(root, "*", new EnumerationOptions
         {
@@ -62,6 +65,13 @@ public sealed class BatchRunner
     {
         OutputPathMapper.EnsureValidRoots(options.InputRoot, options.OutputRoot);
 
+        // The caller's token and the scheduler's are two different tokens; jobs only ever see
+        // the scheduler's. Link them so cancelling either one both stops dispatch and reaches
+        // the running mkvmerge processes, whichever the caller happens to hold.
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, scheduler.Token);
+        using var dropPending = linked.Token.Register(scheduler.CancelPending);
+        var jobCt = linked.Token;
+
         var stopwatch = Stopwatch.StartNew();
         var files = FindSourceFiles(options.InputRoot);
         progress?.Report(new BatchStartedEvent(files.Count));
@@ -76,8 +86,7 @@ public sealed class BatchRunner
         // Distinct inputs can map to the same output name ("movie.mkv" + "movie.mp4" both
         // yield "movie.mkv"), and parallel jobs may resolve before either file exists on
         // disk — so auto-rename must also avoid names claimed by still-running jobs.
-        var reservedOutputs = new HashSet<string>(
-            OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal);
+        var reservedOutputs = new HashSet<string>(PathComparer);
         string ResolveOutput(string mapped)
         {
             if (options.Overwrite != OverwriteBehavior.AutoRename)
@@ -87,6 +96,24 @@ public sealed class BatchRunner
                 var unique = OutputPathMapper.MakeUnique(mapped, reservedOutputs.Contains);
                 reservedOutputs.Add(unique);
                 return unique;
+            }
+        }
+
+        // Overwrite mode has no rename to fall back on, so those same-stem pairs would
+        // aim two muxes at one destination — racing above one worker, and silently discarding
+        // one input's result even at one. Settle it before dispatch: the first source in scan
+        // order keeps the destination and the rest are skipped with a warning naming the winner.
+        var collisions = new Dictionary<string, string>(PathComparer);
+        if (options.Overwrite != OverwriteBehavior.AutoRename)
+        {
+            var claimedBy = new Dictionary<string, string>(PathComparer);
+            foreach (var file in files)
+            {
+                var mapped = OutputPathMapper.Map(options.InputRoot, options.OutputRoot, file);
+                if (claimedBy.TryGetValue(mapped, out var winner))
+                    collisions[file] = winner;
+                else
+                    claimedBy[mapped] = file;
             }
         }
 
@@ -103,16 +130,27 @@ public sealed class BatchRunner
 
         foreach (var file in files)
         {
-            scheduler.Enqueue(async jobCt =>
+            // Cancelling drops what is already queued, but jobs can also complete inline as
+            // they are enqueued (fast identifies, a stubbed runner), so stop feeding too.
+            if (jobCt.IsCancellationRequested)
+                break;
+
+            // jobCt (linked) rather than the scheduler's own token: see the link above.
+            scheduler.Enqueue(async _ =>
             {
                 progress?.Report(new FileStartedEvent(file, files.Count));
                 FileResult result;
                 try
                 {
-                    result = await ProcessOneAsync(options, identifier, remuxer, file, AccumulateMatches,
-                        ResolveOutput,
-                        output => progress?.Report(new FileOutputResolvedEvent(file, output)), jobCt)
-                        .ConfigureAwait(false);
+                    result = collisions.TryGetValue(file, out var winner)
+                        ? new FileResult(file, FileOutcome.SkippedCollision,
+                            $"another source in this batch already writes this output: " +
+                            $"\"{Path.GetFileName(winner)}\"")
+                        : await ProcessOneAsync(options, identifier, remuxer, file, AccumulateMatches,
+                            ResolveOutput,
+                            (output, working) => progress?.Report(
+                                new FileOutputResolvedEvent(file, output, working)), jobCt)
+                            .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
                 {
@@ -151,7 +189,7 @@ public sealed class BatchRunner
                     BytesIn: results.Where(r => r.Succeeded).Sum(r => r.BytesIn),
                     BytesOut: results.Where(r => r.Succeeded).Sum(r => r.BytesOut),
                     Elapsed: stopwatch.Elapsed,
-                    WasCancelled: ct.IsCancellationRequested,
+                    WasCancelled: linked.IsCancellationRequested,
                     UnmatchedAudioTokens: UnmatchedTokens(options.Plan.Audio, matchedAudioTokens),
                     UnmatchedSubtitleTokens: UnmatchedTokens(options.Plan.Subtitles, matchedSubtitleTokens));
             }
@@ -166,7 +204,7 @@ public sealed class BatchRunner
     private static async Task<FileResult> ProcessOneAsync(
         BatchOptions options, MkvIdentifier identifier, MkvRemuxer remuxer, string file,
         Action<MkvFileInfo> onIdentified, Func<string, string> resolveOutput,
-        Action<string> onOutputResolved, CancellationToken ct)
+        Action<string, string> onOutputResolved, CancellationToken ct)
     {
         var info = await identifier.IdentifyAsync(options.MkvmergePath, file, ct).ConfigureAwait(false);
         onIdentified(info);
@@ -182,8 +220,8 @@ public sealed class BatchRunner
 
             default:
                 var outputPath = resolveOutput(OutputPathMapper.Map(options.InputRoot, options.OutputRoot, file));
-                onOutputResolved(outputPath);
-                var remux = await remuxer.RemuxAsync(options.MkvmergePath, plan, file, outputPath, ct)
+                var remux = await remuxer.RemuxAsync(options.MkvmergePath, plan, file, outputPath, ct,
+                        working => onOutputResolved(outputPath, working))
                     .ConfigureAwait(false);
 
                 if (remux.Status == RemuxStatus.Failed)
@@ -213,6 +251,10 @@ public sealed class BatchRunner
         IProgress<ProgressEvent>? progress,
         CancellationToken ct)
     {
+        using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct, scheduler.Token);
+        using var dropPending = linked.Token.Register(scheduler.CancelPending);
+        var jobCt = linked.Token;
+
         var files = FindSourceFiles(inputRoot);
         progress?.Report(new BatchStartedEvent(files.Count));
 
@@ -223,7 +265,10 @@ public sealed class BatchRunner
 
         foreach (var file in files)
         {
-            scheduler.Enqueue(async jobCt =>
+            if (jobCt.IsCancellationRequested)
+                break;
+
+            scheduler.Enqueue(async _ =>
             {
                 string? error = null;
                 try
@@ -265,7 +310,7 @@ public sealed class BatchRunner
                 .OrderByDescending(g => g.Files.Count)
                 .ToList();
             lock (failures)
-                return new ScanReport(files.Count, groups, failures.ToList(), ct.IsCancellationRequested);
+                return new ScanReport(files.Count, groups, failures.ToList(), linked.IsCancellationRequested);
         }
     }
 }

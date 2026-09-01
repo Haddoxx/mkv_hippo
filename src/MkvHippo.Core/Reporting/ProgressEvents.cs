@@ -6,6 +6,8 @@ public enum FileOutcome
     OkWithWarnings,
     SkippedClean,
     SkippedNoMatch,
+    /// <summary>Another source in the same batch already claimed this file's destination.</summary>
+    SkippedCollision,
     Failed,
     Cancelled,
 }
@@ -23,7 +25,8 @@ public sealed record FileResult(
     string? OutputPath = null)
 {
     public bool Succeeded => Outcome is FileOutcome.Ok or FileOutcome.OkWithWarnings;
-    public bool Skipped => Outcome is FileOutcome.SkippedClean or FileOutcome.SkippedNoMatch;
+    public bool Skipped =>
+        Outcome is FileOutcome.SkippedClean or FileOutcome.SkippedNoMatch or FileOutcome.SkippedCollision;
 }
 
 public abstract record ProgressEvent;
@@ -32,8 +35,12 @@ public sealed record BatchStartedEvent(int TotalFiles) : ProgressEvent;
 
 public sealed record FileStartedEvent(string InputPath, int TotalFiles) : ProgressEvent;
 
-/// <summary>The destination for a remux is decided (after any auto-rename).</summary>
-public sealed record FileOutputResolvedEvent(string InputPath, string OutputPath) : ProgressEvent;
+/// <summary>
+/// The destination for a remux is decided (after any auto-rename) and the mux is about to
+/// start. <paramref name="WorkingPath"/> is the file actually growing on disk until the mux
+/// succeeds and is moved onto <paramref name="OutputPath"/>.
+/// </summary>
+public sealed record FileOutputResolvedEvent(string InputPath, string OutputPath, string WorkingPath) : ProgressEvent;
 
 public sealed record FileFinishedEvent(FileResult Result, int Processed, int TotalFiles) : ProgressEvent;
 
