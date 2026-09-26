@@ -141,6 +141,7 @@ public class TrackPlanTests
     {
         var plan = Plan("movie_mp4.json", FilterMode.Languages, "ger", "eng");
         Assert.Equal(PlanAction.SkipNoMatch, plan.Action);
+        Assert.Contains("audio filter", plan.Warning);
     }
 
     [Fact]
@@ -153,22 +154,43 @@ public class TrackPlanTests
     }
 
     [Fact]
-    public void ZeroMatchSubtitleFilterSkipsWithWarning()
+    public void ZeroMatchSubtitleFilterStillRemuxesAndOnlyAdvises()
     {
+        // Dropping every subtitle is what "keep only kor" asks for, and the result is a usable
+        // file — blocking here would throw away the audio filtering that did match.
         var plan = Plan("movie_multilang.json", FilterMode.Languages, "eng", "kor");
 
-        Assert.Equal(PlanAction.SkipNoMatch, plan.Action);
-        Assert.Contains("subtitle filter", plan.Warning);
+        Assert.Equal(PlanAction.Remux, plan.Action);
+        Assert.Null(plan.Warning);
+        Assert.Contains("subtitle filter", plan.Advisory);
+        Assert.Empty(plan.KeptSubtitleIds);
+        Assert.NotEmpty(plan.KeptAudioIds);
     }
 
     [Fact]
-    public void ZeroMatchOnBothTypesReportsBothWarnings()
+    public void ZeroMatchOnBothTypesSkipsForTheAudioReason()
     {
         var plan = Plan("movie_multilang.json", FilterMode.Languages, "ger", "kor");
 
         Assert.Equal(PlanAction.SkipNoMatch, plan.Action);
         Assert.Contains("audio filter", plan.Warning);
-        Assert.Contains("subtitle filter", plan.Warning);
+    }
+
+    [Fact]
+    public void AMatchingSubtitleFilterLeavesNoAdvisory()
+    {
+        var plan = Plan("movie_multilang.json", FilterMode.Languages, "eng", "eng");
+
+        Assert.Equal(PlanAction.Remux, plan.Action);
+        Assert.Null(plan.Advisory);
+    }
+
+    [Fact]
+    public void AFileWithNoSubtitlesAtAllGetsNoAdvisory()
+    {
+        // Vacuous, not a zero match: there was nothing for the filter to miss.
+        var plan = Plan("movie_eng_only.json", FilterMode.Languages, "eng", "kor");
+        Assert.Null(plan.Advisory);
     }
 
     [Fact]

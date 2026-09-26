@@ -55,7 +55,7 @@ public enum PlanAction
     Remux,
     /// <summary>Every existing audio and subtitle track is kept; nothing to do.</summary>
     SkipAlreadyClean,
-    /// <summary>A filter matched zero tracks of a type the file has; skip with a warning.</summary>
+    /// <summary>The audio filter matched zero of the file's audio tracks; skip with a warning.</summary>
     SkipNoMatch,
 }
 
@@ -70,7 +70,8 @@ public sealed record TrackPlan(
     int RemovedSubtitles,
     string? Warning,
     string KeptAudioSummary,
-    string KeptSubtitleSummary)
+    string KeptSubtitleSummary,
+    string? Advisory = null)
 {
     public static TrackPlan Create(MkvFileInfo file, PlanOptions options)
     {
@@ -83,16 +84,20 @@ public sealed record TrackPlan(
         bool keepsAllAudio = keptAudio.Count == audio.Count;
         bool keepsAllSubtitles = keptSubtitles.Count == subtitles.Count;
 
-        var warnings = new List<string>();
-        if (IsZeroMatch(audio, keptAudio, options.Audio))
-            warnings.Add("audio filter matches none of the file's audio tracks");
-        if (IsZeroMatch(subtitles, keptSubtitles, options.Subtitles))
-            warnings.Add("subtitle filter matches none of the file's subtitle tracks");
+        // An audio filter matching nothing would yield a silent file, so it blocks the remux.
+        // The subtitle equivalent does not: dropping every subtitle is literally what the
+        // filter asked for and the result is still a usable file, so it only advises. Blocking
+        // there would throw away the audio work too — "eng" audio + "eng" subs would produce
+        // nothing at all for every file in a library that lacks English subtitles.
+        bool audioZeroMatch = IsZeroMatch(audio, keptAudio, options.Audio);
+        string? advisory = IsZeroMatch(subtitles, keptSubtitles, options.Subtitles)
+            ? "subtitle filter matched none of this file's subtitle tracks — all subtitles dropped"
+            : null;
 
         // A non-Matroska source (e.g. MP4) is never "already clean": keeping every track
         // still requires a remux to convert the container to .mkv.
         var action =
-            warnings.Count > 0 ? PlanAction.SkipNoMatch :
+            audioZeroMatch ? PlanAction.SkipNoMatch :
             keepsAllAudio && keepsAllSubtitles && !file.NeedsContainerConversion ? PlanAction.SkipAlreadyClean :
             PlanAction.Remux;
 
@@ -104,9 +109,10 @@ public sealed record TrackPlan(
             keepsAllSubtitles,
             audio.Count - keptAudio.Count,
             subtitles.Count - keptSubtitles.Count,
-            warnings.Count > 0 ? string.Join("; ", warnings) : null,
+            audioZeroMatch ? "audio filter matches none of the file's audio tracks" : null,
             SummarizeKept(keptAudio, audio.Count, options.Mode),
-            SummarizeKept(keptSubtitles, subtitles.Count, options.Mode));
+            SummarizeKept(keptSubtitles, subtitles.Count, options.Mode),
+            advisory);
     }
 
     /// <summary>
