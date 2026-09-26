@@ -29,7 +29,9 @@ public sealed record ScanReport(
     int TotalFiles,
     IReadOnlyList<ScanGroup> Groups,
     IReadOnlyList<FileResult> Failures,
-    bool WasCancelled);
+    bool WasCancelled,
+    /// <summary>Per-file identify results, for a run that follows immediately to reuse.</summary>
+    IReadOnlyList<MkvFileInfo> Identified);
 
 /// <summary>
 /// Scan → plan → schedule → report. Sources are never modified: output is always written
@@ -57,13 +59,24 @@ public sealed class BatchRunner
         .OrderBy(p => p, StringComparer.OrdinalIgnoreCase)
         .ToList();
 
+    /// <param name="preIdentified">
+    /// Identify results to reuse instead of spawning `mkvmerge -J` per file again — pass
+    /// <see cref="ScanReport.Identified"/> from a scan that immediately precedes this run.
+    /// Matched by path and trusted as-is, so never pass a report the files may have changed
+    /// under; omit it and every file is identified fresh.
+    /// </param>
     public async Task<BatchSummary> RunAsync(
         BatchOptions options,
         AdaptiveScheduler scheduler,
         IProgress<ProgressEvent>? progress,
-        CancellationToken ct)
+        CancellationToken ct,
+        IReadOnlyList<MkvFileInfo>? preIdentified = null)
     {
         OutputPathMapper.EnsureValidRoots(options.InputRoot, options.OutputRoot);
+
+        int swept = MkvRemuxer.SweepWorkingFiles(options.OutputRoot);
+        if (swept > 0)
+            progress?.Report(new WorkingFilesSweptEvent(swept));
 
         // The caller's token and the scheduler's are two different tokens; jobs only ever see
         // the scheduler's. Link them so cancelling either one both stops dispatch and reaches
@@ -75,6 +88,14 @@ public sealed class BatchRunner
         var stopwatch = Stopwatch.StartNew();
         var files = FindSourceFiles(options.InputRoot);
         progress?.Report(new BatchStartedEvent(files.Count));
+
+        Dictionary<string, MkvFileInfo>? identifiedCache = null;
+        if (preIdentified is not null)
+        {
+            identifiedCache = new Dictionary<string, MkvFileInfo>(PathComparer);
+            foreach (var info in preIdentified)
+                identifiedCache[Path.GetFullPath(info.FilePath)] = info;
+        }
 
         var identifier = new MkvIdentifier(_runner);
         var remuxer = new MkvRemuxer(_runner);
@@ -149,7 +170,8 @@ public sealed class BatchRunner
                         : await ProcessOneAsync(options, identifier, remuxer, file, AccumulateMatches,
                             ResolveOutput,
                             (output, working) => progress?.Report(
-                                new FileOutputResolvedEvent(file, output, working)), jobCt)
+                                new FileOutputResolvedEvent(file, output, working)),
+                            identifiedCache, jobCt)
                             .ConfigureAwait(false);
                 }
                 catch (OperationCanceledException)
@@ -204,9 +226,15 @@ public sealed class BatchRunner
     private static async Task<FileResult> ProcessOneAsync(
         BatchOptions options, MkvIdentifier identifier, MkvRemuxer remuxer, string file,
         Action<MkvFileInfo> onIdentified, Func<string, string> resolveOutput,
-        Action<string, string> onOutputResolved, CancellationToken ct)
+        Action<string, string> onOutputResolved,
+        IReadOnlyDictionary<string, MkvFileInfo>? identifiedCache, CancellationToken ct)
     {
-        var info = await identifier.IdentifyAsync(options.MkvmergePath, file, ct).ConfigureAwait(false);
+        // A scan immediately before this run already read every header; reuse it rather than
+        // spawning a second `mkvmerge -J` per file.
+        var info = identifiedCache is not null
+            && identifiedCache.TryGetValue(Path.GetFullPath(file), out var cached)
+                ? cached
+                : await identifier.IdentifyAsync(options.MkvmergePath, file, ct).ConfigureAwait(false);
         onIdentified(info);
         var plan = TrackPlan.Create(info, options.Plan);
 
@@ -227,12 +255,21 @@ public sealed class BatchRunner
                 if (remux.Status == RemuxStatus.Failed)
                     return new FileResult(file, FileOutcome.Failed, remux.Error);
 
+                // The file processed fine, but a subtitle filter that matched nothing still
+                // needs saying — alongside whatever mkvmerge warned about.
+                var notes = new List<string>(2);
+                if (plan.Advisory is not null)
+                    notes.Add(plan.Advisory);
+                if (remux.Warnings is not null)
+                    notes.Add(remux.Warnings);
+                string? message = notes.Count > 0 ? string.Join("; ", notes) : null;
+
                 long bytesIn = new FileInfo(file).Length;
                 long bytesOut = File.Exists(outputPath) ? new FileInfo(outputPath).Length : 0;
                 return new FileResult(
                     file,
-                    remux.Status == RemuxStatus.Ok ? FileOutcome.Ok : FileOutcome.OkWithWarnings,
-                    remux.Warnings,
+                    message is null ? FileOutcome.Ok : FileOutcome.OkWithWarnings,
+                    message,
                     plan.RemovedAudio,
                     plan.RemovedSubtitles,
                     bytesIn,
@@ -310,7 +347,9 @@ public sealed class BatchRunner
                 .OrderByDescending(g => g.Files.Count)
                 .ToList();
             lock (failures)
-                return new ScanReport(files.Count, groups, failures.ToList(), linked.IsCancellationRequested);
+                return new ScanReport(
+                    files.Count, groups, failures.ToList(), linked.IsCancellationRequested,
+                    identified.ToList());
         }
     }
 }

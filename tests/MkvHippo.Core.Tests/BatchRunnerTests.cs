@@ -379,8 +379,8 @@ public class BatchRunnerTests : IDisposable
         Assert.Equal(1, summary.Skipped);
         Assert.Equal(0, summary.Failed);
 
-        var skipped = Assert.Single(events.OfType<FileFinishedEvent>()
-            .Where(e => e.Result.Outcome == FileOutcome.SkippedCollision));
+        var skipped = Assert.Single(
+            events.OfType<FileFinishedEvent>(), e => e.Result.Outcome == FileOutcome.SkippedCollision);
         Assert.EndsWith("movie.mp4", skipped.Result.InputPath);
         Assert.Contains("movie.mkv", skipped.Result.Message);
 
@@ -496,6 +496,96 @@ public class BatchRunnerTests : IDisposable
         var bigGroup = report.Groups.Single(g => g.Files.Count == 2);
         Assert.All(bigGroup.Files, f => Assert.Contains("e0", Path.GetFileName(f)));
         Assert.Equal(6, bigGroup.Tracks.Count);
+    }
+
+    [Fact]
+    public async Task AScanImmediatelyBeforeARunSparesEveryFileASecondIdentify()
+    {
+        for (int i = 0; i < 4; i++)
+            AddSourceFile($"movie{i}.mkv");
+        var runner = MkvmergeEmulator(_ => "movie_multilang.json");
+        var batch = new BatchRunner(runner);
+        var scheduler = new AdaptiveScheduler(2);
+
+        var report = await batch.ScanAsync(
+            _inputRoot, "mkvmerge", scheduler, null, CancellationToken.None);
+        int identifiesAfterScan = runner.Calls.Count(c => c.Arguments[0] == "-J");
+
+        var summary = await batch.RunAsync(
+            Options(), scheduler, null, CancellationToken.None, report.Identified);
+
+        Assert.Equal(4, identifiesAfterScan);
+        Assert.Equal(4, runner.Calls.Count(c => c.Arguments[0] == "-J"));  // no second pass
+        Assert.Equal(4, runner.Calls.Count(c => c.Arguments.Contains("-o")));
+        Assert.Equal(4, summary.Succeeded);
+        Assert.Equal(4, report.Identified.Count);
+    }
+
+    [Fact]
+    public async Task WithoutAPreIdentifiedReportEveryFileIsIdentifiedFresh()
+    {
+        for (int i = 0; i < 4; i++)
+            AddSourceFile($"movie{i}.mkv");
+        var runner = MkvmergeEmulator(_ => "movie_multilang.json");
+        var batch = new BatchRunner(runner);
+        var scheduler = new AdaptiveScheduler(2);
+
+        await batch.ScanAsync(_inputRoot, "mkvmerge", scheduler, null, CancellationToken.None);
+        await batch.RunAsync(Options(), scheduler, null, CancellationToken.None);
+
+        Assert.Equal(8, runner.Calls.Count(c => c.Arguments[0] == "-J"));
+    }
+
+    [Fact]
+    public async Task ASubtitleFilterMatchingNothingStillProducesTheFileAndSaysSo()
+    {
+        AddSourceFile("movie.mkv");
+        var runner = MkvmergeEmulator(_ => "movie_multilang.json");
+
+        var events = new List<ProgressEvent>();
+        var summary = await new BatchRunner(runner).RunAsync(
+            Options(audio: "eng", subs: "kor"), new AdaptiveScheduler(1),
+            new SynchronousProgress(events), CancellationToken.None);
+
+        Assert.Equal(1, summary.Succeeded);
+        Assert.Equal(0, summary.Skipped);
+        var finished = Assert.Single(events.OfType<FileFinishedEvent>());
+        Assert.Equal(FileOutcome.OkWithWarnings, finished.Result.Outcome);
+        Assert.Contains("subtitle filter", finished.Result.Message);
+        Assert.True(File.Exists(Path.Combine(_outputRoot, "movie.mkv")));
+    }
+
+    [Fact]
+    public async Task LeftoverWorkingFilesAreSweptBeforeTheBatchAndReported()
+    {
+        AddSourceFile("movie.mkv");
+        Directory.CreateDirectory(_outputRoot);
+        var stale = Path.Combine(_outputRoot, "orphan.mkv.deadbeef" + MkvRemuxer.WorkingSuffix);
+        File.WriteAllText(stale, "half a mux from a crashed run");
+        var runner = MkvmergeEmulator(_ => "movie_multilang.json");
+
+        var events = new List<ProgressEvent>();
+        await new BatchRunner(runner).RunAsync(
+            Options(), new AdaptiveScheduler(1), new SynchronousProgress(events), CancellationToken.None);
+
+        Assert.False(File.Exists(stale), "leftovers from an interrupted run must be cleaned up");
+        Assert.Equal(1, Assert.Single(events.OfType<WorkingFilesSweptEvent>()).Count);
+    }
+
+    [Fact]
+    public async Task RefusesAnInputRootInsideTheOutputRoot()
+    {
+        var options = new BatchOptions
+        {
+            InputRoot = Path.Combine(_inputRoot, "nested"),
+            OutputRoot = _inputRoot,
+            MkvmergePath = "mkvmerge",
+            Plan = PlanOptions.FromText(FilterMode.Languages, "eng", "eng"),
+        };
+
+        await Assert.ThrowsAsync<ArgumentException>(
+            () => new BatchRunner(new FakeProcessRunner()).RunAsync(
+                options, new AdaptiveScheduler(1), null, CancellationToken.None));
     }
 
     /// <summary>Reports inline (no SynchronizationContext) so tests observe every event.</summary>

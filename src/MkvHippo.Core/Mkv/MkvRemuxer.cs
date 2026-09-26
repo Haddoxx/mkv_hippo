@@ -71,6 +71,43 @@ public sealed class MkvRemuxer
         return Path.Combine(directory, $"{Path.GetFileName(outputPath)}.{token}{WorkingSuffix}");
     }
 
+    /// <summary>
+    /// Deletes working files left under <paramref name="root"/> by a run that was interrupted
+    /// without cleanup — a crash, a power loss, a killed process. An ordinary failure or
+    /// cancellation already removes its own. A file another instance is actively muxing is
+    /// locked on Windows, so its delete fails and it is left alone.
+    /// </summary>
+    /// <returns>How many leftovers were removed.</returns>
+    public static int SweepWorkingFiles(string root)
+    {
+        string[] leftovers;
+        try
+        {
+            if (!Directory.Exists(root))
+                return 0;
+            leftovers = Directory.GetFiles(root, "*" + WorkingSuffix, new EnumerationOptions
+            {
+                RecurseSubdirectories = true,
+                IgnoreInaccessible = true,
+            });
+        }
+        catch (IOException) { return 0; }
+        catch (UnauthorizedAccessException) { return 0; }
+
+        int swept = 0;
+        foreach (var path in leftovers)
+        {
+            try
+            {
+                File.Delete(path);
+                swept++;
+            }
+            catch (IOException) { }
+            catch (UnauthorizedAccessException) { }
+        }
+        return swept;
+    }
+
     /// <param name="onWorkingPath">
     /// Called with the in-progress path once it is chosen, before mkvmerge starts — it is the
     /// file growing on disk while the mux runs, which is what a throughput gauge must measure.

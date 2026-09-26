@@ -206,6 +206,36 @@ public class MkvRemuxerTests : IDisposable
         Assert.EndsWith(MkvRemuxer.WorkingSuffix, first);
     }
 
+    // --- Sweeping leftovers from an interrupted run ---
+
+    [Fact]
+    public void SweepRemovesOnlyWorkingFilesAndRecursesTheOutputTree()
+    {
+        var nested = Path.Combine(_tempDir, "shows", "s01");
+        Directory.CreateDirectory(nested);
+        var stale = Path.Combine(_tempDir, "movie.mkv.abc12345" + MkvRemuxer.WorkingSuffix);
+        var staleNested = Path.Combine(nested, "e01.mkv.def67890" + MkvRemuxer.WorkingSuffix);
+        var keep = Path.Combine(_tempDir, "movie.mkv");
+        var keepNested = Path.Combine(nested, "e01.mkv");
+        foreach (var f in new[] { stale, staleNested, keep, keepNested })
+            File.WriteAllText(f, "x");
+
+        int swept = MkvRemuxer.SweepWorkingFiles(_tempDir);
+
+        Assert.Equal(2, swept);
+        Assert.False(File.Exists(stale));
+        Assert.False(File.Exists(staleNested));
+        Assert.True(File.Exists(keep), "real outputs must survive the sweep");
+        Assert.True(File.Exists(keepNested));
+    }
+
+    [Fact]
+    public void SweepIsSilentWhenThereIsNothingToDoOrNoOutputTreeYet()
+    {
+        Assert.Equal(0, MkvRemuxer.SweepWorkingFiles(_tempDir));
+        Assert.Equal(0, MkvRemuxer.SweepWorkingFiles(Path.Combine(_tempDir, "does-not-exist")));
+    }
+
     /// <summary>Emulates mkvmerge writing its -o target, then exiting with the given code.</summary>
     private static FakeProcessRunner WritingRunner(string content, int exitCode = 0, string stdErr = "")
     {

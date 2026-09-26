@@ -33,6 +33,9 @@ public abstract record ProgressEvent;
 
 public sealed record BatchStartedEvent(int TotalFiles) : ProgressEvent;
 
+/// <summary>Working files from an earlier interrupted run were cleaned out of the output tree.</summary>
+public sealed record WorkingFilesSweptEvent(int Count) : ProgressEvent;
+
 public sealed record FileStartedEvent(string InputPath, int TotalFiles) : ProgressEvent;
 
 /// <summary>
