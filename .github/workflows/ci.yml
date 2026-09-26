@@ -1,0 +1,51 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  engine-tests:
+    # The engine is a plain net8.0 library precisely so it can be tested without Windows.
+    name: Engine tests (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Test
+        run: dotnet test --configuration Release -warnaserror --logger "console;verbosity=normal"
+
+  app-build:
+    # The WinForms shell can't run in CI, but it must at least compile warning-free.
+    name: App build (Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Build
+        run: dotnet build src/MkvHippo.App -c Release -warnaserror
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+      - name: Fail on vulnerable packages
+        shell: bash
+        run: |
+          dotnet restore
+          report=$(dotnet list package --vulnerable --include-transitive)
+          echo "$report"
+          if grep -qiE '^\s+> ' <<<"$report"; then
+            echo "::error::vulnerable package(s) found"
+            exit 1
+          fi
