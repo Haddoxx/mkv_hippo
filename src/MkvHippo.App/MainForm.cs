@@ -147,18 +147,22 @@ public partial class MainForm : Form
         BeginResourceSession();
         try
         {
+            // Only a scan run just now can be reused: an older one (HasScanned) may predate
+            // edits to the tree, so in that case the batch identifies everything itself.
+            IReadOnlyList<MkvFileInfo>? preIdentified = null;
             if (!HasScanned(inputRoot))
             {
                 Log("input folder not scanned yet — scanning first");
                 var report = await ExecuteScanAsync(inputRoot, mkvmergePath, progress);
                 if (report.WasCancelled)
                     return;
+                preIdentified = report.Identified;
                 Log("");
             }
 
             Log($"starting: {inputRoot} → {outputRoot}");
             var summary = await Task.Run(() =>
-                new BatchRunner().RunAsync(options, _scheduler!, progress, _cts!.Token));
+                new BatchRunner().RunAsync(options, _scheduler!, progress, _cts!.Token, preIdentified));
             LogSummary(summary);
         }
         catch (Exception ex)
@@ -348,6 +352,10 @@ public partial class MainForm : Form
                 progressBar.Value = 0;
                 lblCounter.Text = $"0/{started.TotalFiles}";
                 Log($"found {started.TotalFiles} file(s)");
+                break;
+
+            case WorkingFilesSweptEvent swept:
+                Log($"cleaned up {swept.Count} leftover working file(s) from an interrupted run");
                 break;
 
             case FileOutputResolvedEvent resolved:

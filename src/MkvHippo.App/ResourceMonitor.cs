@@ -121,6 +121,11 @@ internal sealed class ResourceMonitor : IDisposable
         }
     }
 
+    /// <summary>
+    /// pdh.dll is a system library, but the executable's own directory precedes System32 in the
+    /// default load order — and users are told to drop mkvmerge.exe beside MKVHippo.exe, so that
+    /// directory is not necessarily trustworthy. Every import is pinned to System32.
+    /// </summary>
     private static class Pdh
     {
         internal const uint PDH_FMT_DOUBLE = 0x00000200;
@@ -133,18 +138,23 @@ internal sealed class ResourceMonitor : IDisposable
             [FieldOffset(8)] public double DoubleValue;
         }
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [DllImport("pdh.dll", CharSet = CharSet.Unicode)]
         internal static extern uint PdhOpenQuery(string? szDataSource, IntPtr dwUserData, out IntPtr phQuery);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [DllImport("pdh.dll", CharSet = CharSet.Unicode)]
         internal static extern uint PdhAddEnglishCounter(IntPtr hQuery, string szFullCounterPath, IntPtr dwUserData, out IntPtr phCounter);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [DllImport("pdh.dll")]
         internal static extern uint PdhCollectQueryData(IntPtr hQuery);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [DllImport("pdh.dll")]
         internal static extern uint PdhGetFormattedCounterValue(IntPtr hCounter, uint dwFormat, IntPtr lpdwType, out FmtCounterValue pValue);
 
+        [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
         [DllImport("pdh.dll")]
         internal static extern uint PdhCloseQuery(IntPtr hQuery);
     }
