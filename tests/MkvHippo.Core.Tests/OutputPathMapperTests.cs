@@ -1,9 +1,20 @@
 namespace MkvHippo.Core.Tests;
 
-public class OutputPathMapperTests
+public class OutputPathMapperTests : IDisposable
 {
     private static readonly string Root = Path.Combine(Path.GetTempPath(), "hippo-in");
     private static readonly string Out = Path.Combine(Path.GetTempPath(), "hippo-out");
+
+    /// <summary>Real directory for the tests that need one on disk (symlink resolution).</summary>
+    private readonly string _root =
+        Path.Combine(Path.GetTempPath(), "mkvhippo-paths-" + Guid.NewGuid().ToString("N"));
+
+    public OutputPathMapperTests() => Directory.CreateDirectory(_root);
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_root, recursive: true); } catch { }
+    }
 
     [Fact]
     public void MapsTopLevelFile()
@@ -48,6 +59,48 @@ public class OutputPathMapperTests
     {
         Assert.Throws<ArgumentException>(
             () => OutputPathMapper.EnsureValidRoots(Root, Path.Combine(Root, "out")));
+    }
+
+    [Fact]
+    public void RefusesAnInputRootInsideTheOutputRoot()
+    {
+        // The dangerous direction: with in=<root>/a/b and out=<root>/a, a source at
+        // "a/b/b/x.mkv" maps to "a/b/x.mkv" — inside the input tree, on top of a source file.
+        var ex = Assert.Throws<ArgumentException>(
+            () => OutputPathMapper.EnsureValidRoots(Path.Combine(_root, "a", "b"), Path.Combine(_root, "a")));
+        Assert.Contains("input folder must not be inside", ex.Message);
+    }
+
+    [Fact]
+    public void TheDangerousMappingThatGuardExistsForIsRealWhenUnguarded()
+    {
+        // Documents exactly what EnsureValidRoots now refuses: proof the guard is not cosmetic.
+        var inputRoot = Path.Combine(_root, "a", "b");
+        var outputRoot = Path.Combine(_root, "a");
+        var mapped = OutputPathMapper.Map(inputRoot, outputRoot, Path.Combine(inputRoot, "b", "x.mkv"));
+
+        Assert.Equal(Path.Combine(inputRoot, "x.mkv"), mapped);
+        Assert.True(OutputPathMapper.IsInsideOrEqual(inputRoot, mapped),
+            "the mapped destination lands inside the input tree");
+    }
+
+    [Fact]
+    public void RefusesRootsThatAreTheSameDirectoryReachedThroughASymlink()
+    {
+        var real = Path.Combine(_root, "real");
+        var link = Path.Combine(_root, "link");
+        Directory.CreateDirectory(real);
+        try
+        {
+            Directory.CreateSymbolicLink(link, real);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or PlatformNotSupportedException)
+        {
+            return; // unprivileged Windows can't create links; nothing to assert here
+        }
+
+        Assert.Throws<ArgumentException>(() => OutputPathMapper.EnsureValidRoots(real, link));
+        Assert.Throws<ArgumentException>(() => OutputPathMapper.EnsureValidRoots(link, real));
     }
 
     [Fact]

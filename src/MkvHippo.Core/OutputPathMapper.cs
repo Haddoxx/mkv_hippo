@@ -24,17 +24,50 @@ public static class OutputPathMapper
     /// <summary>True if <paramref name="child"/> equals or lies inside <paramref name="parent"/>.</summary>
     public static bool IsInsideOrEqual(string parent, string child)
     {
-        var p = Path.GetFullPath(parent).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-        var c = Path.GetFullPath(child).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        var p = Resolve(parent);
+        var c = Resolve(child);
         var comparison = OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
         return c.Equals(p, comparison) || c.StartsWith(p + Path.DirectorySeparatorChar, comparison);
     }
 
-    /// <summary>Refuses an output root that is the input root or lies inside it.</summary>
+    /// <summary>
+    /// Absolute, separator-trimmed path, following a symlink/junction on the final component so
+    /// two names for one directory compare equal. A link in the middle of the path is not
+    /// followed — .NET exposes no full canonicalization — so that case still slips through.
+    /// </summary>
+    private static string Resolve(string path)
+    {
+        var full = Path.GetFullPath(path)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        try
+        {
+            if (Directory.ResolveLinkTarget(full, returnFinalTarget: true) is { } target)
+            {
+                return Path.GetFullPath(target.FullName)
+                    .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            }
+        }
+        catch (IOException) { }
+        catch (UnauthorizedAccessException) { }
+        return full;
+    }
+
+    /// <summary>
+    /// Refuses overlapping roots in either direction. Output inside input would feed this run's
+    /// own outputs back into the next scan; input inside output is worse — a file at
+    /// "&lt;in&gt;/&lt;leaf&gt;/x.mkv" maps to "&lt;in&gt;/x.mkv", so a mapped destination can land on
+    /// a source file and Overwrite mode would destroy it.
+    /// </summary>
     public static void EnsureValidRoots(string inputRoot, string outputRoot)
     {
         if (IsInsideOrEqual(inputRoot, outputRoot))
             throw new ArgumentException("The output folder must not be inside (or equal to) the input folder.");
+        if (IsInsideOrEqual(outputRoot, inputRoot))
+        {
+            throw new ArgumentException(
+                "The input folder must not be inside the output folder: outputs would be written " +
+                "back into the tree being read, and could overwrite your source files.");
+        }
     }
 
     /// <summary>
