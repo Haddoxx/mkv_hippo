@@ -17,25 +17,32 @@ Designed by myself; coded and built by Claude Fable 5 Max. Use it at your own ri
 - **Language or Track-ID filtering** — keep audio/subtitle tracks by language code
   (`eng, jpn`), by mkvmerge track ID, drop all of a type (`none`), or keep all (leave blank).
 - **Identify-first** — every file's real track layout is read via `mkvmerge -J` before any
-  decision; MKVs that already match your filters are skipped ("already clean"), and filters
-  matching zero tracks skip with a warning instead of producing a silent file. Starting a batch
-  on a folder you haven't scanned yet runs the scan automatically first.
+  decision; MKVs that already match your filters are skipped ("already clean"). An **audio**
+  filter that matches nothing skips the file with a warning rather than produce a silent one;
+  a **subtitle** filter that matches nothing is not fatal — the file is processed with its
+  subtitles dropped (which is what the filter asked for) and the log says so. Starting a batch
+  on a folder you haven't scanned yet runs the scan automatically first, and the batch reuses
+  that scan instead of reading every header a second time.
 - **Filter feedback** — scan lines show both language forms when they differ (e.g.
   `[en / eng]`; a filter matches either), and the end-of-run summary warns about filter values
   that matched no tracks in any file (likely typos).
 - **Live parallelism control** — process 1–4 files concurrently, adjustable *while running*:
   scale-up dispatches new jobs immediately; scale-down never kills a running job, it just stops
   backfilling slots until the active count drains to the new target.
-- **Lossless** — pure remux, no re-encoding. Sources are never modified.
+- **Lossless** — pure remux, no re-encoding. Sources are never modified: the input and output
+  folders are required not to overlap in *either* direction, so no output can ever be written
+  back into the tree being read.
 - **Destination overwrite policy** — by default an existing destination file is never
   clobbered: the new output is written as `name (1).mkv` (then `(2)`, …) and the rename is
   noted in the log. Select *Overwrite* to replace existing files instead. Under *Overwrite*,
   two sources that would land on the same destination (`movie.mkv` and `movie.mp4` both map
   to `movie.mkv`) are not raced: the first keeps the name and the rest are skipped with a
   warning. Auto rename gives them both an output.
-- **Crash-safe writes** — every mux goes to a temporary file next to its destination and is
-  moved into place only once mkvmerge reports success, so a failure, a *Stop*, or a mid-run
-  close leaves an existing destination file exactly as it was.
+- **Crash-safe writes** — every mux goes to a temporary `.mkvhippo-tmp` file next to its
+  destination and is moved into place only once mkvmerge reports success, so a failure, a
+  *Stop*, or a mid-run close leaves an existing destination file exactly as it was. A failure
+  or a *Stop* deletes its own temporary file; anything left behind by a crash or a power loss
+  is swept from the output tree at the start of the next run.
 - **Bottleneck gauges** — the status bar shows system CPU utilization (Task Manager's
   frequency-normalized metric), disk active time, the busiest network adapter's share of its
   link speed, and the current remux write throughput (MB/s), refreshed twice a second, with
@@ -56,8 +63,9 @@ a self-contained single file, no .NET installation required.
 ## Usage
 
 1. Launch `MKVHippo.exe`.
-2. Pick an **Input folder**; the **Output folder** defaults to a sibling named `<input>-hippo`
-   (the output folder must not be inside the input folder).
+2. Pick an **Input folder**; the **Output folder** defaults to a sibling named `<input>-hippo`.
+   The two folders must not overlap — neither inside the other — which is what guarantees a
+   remux can never land on one of your source files.
 3. Choose **Languages** or **Track IDs** mode and fill the Audio / Subtitle filter boxes:
    - `eng, jpn` — keep only those languages (or IDs in Track-ID mode); `und` matches
      tracks with an undetermined/missing language.

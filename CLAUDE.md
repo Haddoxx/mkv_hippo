@@ -29,26 +29,42 @@ it end-to-end, build the final binary, and leave the repo in a committed, workin
   App project so the `net8.0-windows` WinForms target compiles. Install the .NET 8 SDK first if
   absent (`https://dot.net/v1/dotnet-install.sh --channel 8.0`).
 
+Original spec layout (see §9 for what was added since):
+
 ```
-mkv-hippo/
+mkv_hippo/
 ├── CLAUDE.md                  (this file)
 ├── README.md                  (usage, build instructions)
-├── .gitignore                 (standard dotnet: bin/, obj/, *.user, publish/)
+├── LICENSE                    (GPLv3)
+├── .gitignore                 (standard dotnet: bin/, obj/, *.user, publish/, dist/)
+├── Directory.Build.props      (PathMap + embedded PDBs; see §9 privacy posture)
 ├── MkvHippo.sln
+├── .github/workflows/ci.yml   (engine tests on Linux, app build on Windows, dep audit)
 ├── src/
 │   ├── MkvHippo.Core/         net8.0 class library — all logic lives here
 │   │   ├── Mkv/
 │   │   │   ├── MkvIdentifier.cs      runs `mkvmerge -J`, parses JSON
 │   │   │   ├── TrackPlan.cs          decides keep/drop per file
 │   │   │   └── MkvRemuxer.cs         runs the mux, interprets exit codes
+│   │   ├── Processes/
+│   │   │   ├── IProcessRunner.cs     child-process seam (tests stub this)
+│   │   │   └── ProcessRunner.cs      the real implementation
 │   │   ├── Scheduling/
 │   │   │   └── AdaptiveScheduler.cs  dynamic-concurrency dispatcher (§3)
+│   │   ├── Reporting/
+│   │   │   ├── ProgressEvents.cs
+│   │   │   ├── ThroughputMeter.cs    smoothed MB/s
+│   │   │   └── BottleneckStats.cs    session bottleneck verdict
 │   │   ├── BatchRunner.cs            scan → plan → schedule → report
-│   │   └── Reporting/ProgressEvents.cs
+│   │   ├── MkvmergeLocator.cs        finds mkvmerge (§2)
+│   │   └── OutputPathMapper.cs       input→output mapping, root validation
 │   └── MkvHippo.App/          net8.0-windows WinForms shell
 │       ├── MainForm.cs / MainForm.Designer.cs
+│       ├── ResourceMonitor.cs        PDH/NIC sampling for the gauges
+│       ├── hippo.ico
 │       └── Program.cs
 └── tests/
+    ├── fixtures/              committed `mkvmerge -J` outputs
     └── MkvHippo.Core.Tests/   xunit
 ```
 
@@ -137,9 +153,12 @@ Per file: identify first, always (both modes — this fixes MKVStrip's blind-rem
   "already clean".
 - **Safety rule:** if an audio filter matches zero of the file's audio tracks (and the file has
   audio, and the filter isn't `none`), skip with a warning rather than emit a silent file.
-  Same for subtitles.
+  **Not** the same for subtitles (revised — see §9 v0.1.3): a zero-match subtitle filter is an
+  advisory, not a skip. Dropping every subtitle is what the filter asked for and the result is
+  still a usable file, whereas blocking would also discard the audio filtering that did match.
 - Output path mirrors the relative subpath under the chosen output root; create directories.
-  Refuse an output root inside the input root. Never modify source files.
+  Refuse roots that overlap in **either** direction — output inside input, or input inside
+  output (revised; see §9 v0.1.3). Never modify source files.
 
 ## 5. UI spec (WinForms, single window)
 
@@ -186,15 +205,17 @@ before running `gh repo create`.
 
 ## 8. Acceptance checklist
 
-- [ ] `dotnet test` green; scheduler tests cover cases (a)–(f) in §3.
-- [ ] `dist/MkvHippo.exe` produced, self-contained single file, win-x64.
-- [ ] Radio group functions during processing; scale-up immediate, scale-down drains without
+All met as of v0.1.3:
+
+- [x] `dotnet test` green; scheduler tests cover cases (a)–(f) in §3.
+- [x] `dist/MKVHippo.exe` produced, self-contained single file, win-x64.
+- [x] Radio group functions during processing; scale-up immediate, scale-down drains without
       killing jobs.
-- [ ] Files needing no changes are skipped without remux in both modes.
-- [ ] Zero-match filters skip with warning; sources never modified; partial outputs cleaned on
-      failure/cancel.
-- [ ] No text-scraping of mkvmerge output anywhere; JSON identify + exit codes only.
-- [ ] Repo committed in logical units with the layout of §1.
+- [x] Files needing no changes are skipped without remux in both modes.
+- [x] Zero-match **audio** filters skip with warning (subtitles advise — §4); sources never
+      modified; partial outputs cleaned on failure/cancel.
+- [x] No text-scraping of mkvmerge output anywhere; JSON identify + exit codes only.
+- [x] Repo committed in logical units with the layout of §1.
 
 ---
 
@@ -202,9 +223,10 @@ before running `gh repo create`.
 
 The brief above is fully implemented and shipped; treat it as the original spec, and this
 section as the delta. Repo remote: `Haddoxx/mkv_hippo` — public, GPLv3 (`LICENSE`).
-Releases: v0.1.0, v0.1.1, v0.1.2 (current). Only v0.1.2 carries the self-contained
-`MKVHippo.exe`; its asset was rebuilt post-tag to include the higher-fidelity icon, and the
-older exes were deleted (pre-PathMap, embedded local paths).
+Releases: v0.1.0, v0.1.1, v0.1.2 (latest tagged). v0.1.3 is committed but not yet tagged or
+pushed. Only v0.1.2 carries the self-contained `MKVHippo.exe`; its asset was rebuilt post-tag
+to include the higher-fidelity icon, and the older exes were deleted (pre-PathMap, embedded
+local paths).
 
 Privacy posture (2026-07-05): commit history carries only `Haddoxx
 <Haddoxx@users.noreply.github.com>` (names and emails rewritten; git config matches), and
@@ -212,7 +234,8 @@ Privacy posture (2026-07-05): commit history carries only `Haddoxx
 for all assemblies — published binaries contain no local usernames or paths (verify with
 `strings` after a publish).
 
-Features added beyond the original spec (all engine logic tested; 111 tests green):
+Features added beyond the original spec (all engine logic tested — for the current test
+count run `dotnet test`; don't hardcode it here, it drifts):
 
 - **MP4/M4V input** (2026-07-05): discovery accepts `.mkv`/`.mp4`/`.m4v`; the output is always
   `.mkv` (`OutputPathMapper.Map` swaps the extension — mkvmerge only writes Matroska).
@@ -273,5 +296,50 @@ Verified against real mkvmerge on Linux via a throwaway harness over `MkvHippo.C
 (auto-rename, overwrite collision, write failure, mid-mux Stop): destinations preserved, no
 `.mkvhippo-tmp` leftovers, no orphaned children. The WinForms close path is compile-only here.
 
+### v0.1.3, second pass (2026-09-26) — full-project review fixes
+
+A review of the whole tree (code + docs, not just a diff) found eleven items; all are fixed
+here, still under the unreleased v0.1.3.
+
+- **Overlapping roots can no longer destroy a source file.** `EnsureValidRoots` guarded only
+  "output inside input". The reverse was allowed and was the dangerous one: with input
+  `<root>/a/b` and output `<root>/a`, a source at `a/b/b/x.mkv` maps to `a/b/x.mkv` — on top of
+  another source. Reproduced against real mkvmerge: under Overwrite the source went from 3
+  tracks to 2 and the run still reported `ok=1 skipped=1 failed=0`. Both directions are now
+  refused, and `IsInsideOrEqual` resolves a symlink/junction on the final path component so two
+  names for one directory compare equal (a link *mid*-path is still not followed — .NET exposes
+  no full canonicalization).
+- **A zero-match subtitle filter no longer discards the whole file** (spec §4 revised). It was
+  a `SkipNoMatch` like the audio case, but the "don't emit a silent file" rationale does not
+  transfer: the common `eng`/`eng` filter pair produced *nothing at all* for every file lacking
+  English subtitles. It is now `TrackPlan.Advisory`, the remux proceeds with subtitles dropped,
+  and the result is `OkWithWarnings` so the log still says so.
+- **Leftover working files are swept.** A crash or power loss left `.mkvhippo-tmp` files
+  forever. `MkvRemuxer.SweepWorkingFiles` clears them from the output tree at batch start and
+  reports a `WorkingFilesSweptEvent`; a file another instance is actively muxing is locked on
+  Windows, so its delete fails and it is left alone.
+- **Auto-scan no longer identifies every file twice.** Measured 3 files → 6 `mkvmerge -J`
+  calls. `ScanReport.Identified` now carries the per-file results and `RunAsync` takes an
+  optional `preIdentified`. `MainForm` passes it **only** for a scan that just ran — an older
+  scan (`HasScanned`) may predate edits, so that path still identifies fresh.
+- **PDH P/Invokes pinned to System32** (`DefaultDllImportSearchPaths`). The exe's own directory
+  precedes System32 in the load order, and users are told to drop `mkvmerge.exe` beside
+  `MKVHippo.exe`, so that directory is not necessarily trustworthy.
+- **Test dependencies bumped**, clearing two High-severity transitive advisories
+  (`System.Net.Http` / `System.Text.RegularExpressions` 4.3.0, via Test.Sdk 17.8.0). They were
+  build-time only — confirmed absent from the shipped exe. `xunit` stays on the 2.x line
+  (2.9.3, latest supported); the whole v2 line is flagged Legacy in favour of xunit.v3, which
+  is a migration, not a bump — deliberately deferred.
+- **CI added** (`.github/workflows/ci.yml`): engine tests on Linux, `-warnaserror` app build on
+  Windows, and a dependency audit that fails on any vulnerable package. All three were
+  validated locally before committing.
+- **Docs**: this file contradicted itself (said v0.1.2 was current next to a v0.1.3 section;
+  "111 tests green" next to "124"), the §8 checklist was still unticked, and the §1 tree used
+  the wrong directory name and omitted eight files. README claimed "sources are never
+  modified", which the root bug falsified. The release routine now says to name the release
+  asset explicitly rather than glob `dist/`, which holds a local `mkvmerge.exe`.
+
 Release routine: bump `<Version>` in `src/MkvHippo.App/MkvHippo.App.csproj` → `dotnet test` →
-publish per §6 → copy to `dist/` → commit/push → `gh release create v<X.Y.Z> dist/MKVHippo.exe`.
+publish per §6 → copy to `dist/` → commit/push the source → `gh release create v<X.Y.Z>
+dist/MKVHippo.exe`. Name that asset explicitly, never `dist/*`: `dist/` is gitignored scratch
+and may hold a local `mkvmerge.exe`, which §2 forbids shipping on licensing grounds.
