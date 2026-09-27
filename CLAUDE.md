@@ -339,6 +339,50 @@ here and shipped in v0.1.3.
   modified", which the root bug falsified. The release routine now says to name the release
   asset explicitly rather than glob `dist/`, which holds a local `mkvmerge.exe`.
 
+### Startup performance: investigated 2026-09-27, not pursued
+
+Prompted by ".NET apps are slow to start, due to the bulk". The bulk turned out not to be the
+cause. Measured on the Windows host through WSL interop, one harness for every row — launch,
+poll until a visible >200px top-level window owned by the process exists, 12–14 runs, median:
+
+| shell | binary | median |
+|---|---|---|
+| raw Win32 (FPC, hand-built) | 134 KB | **32.7 ms** |
+| Lazarus LCL, win32 widgetset | 2.55 MB | **48.6 ms** |
+| MKVHippo as shipped (.NET WinForms) | 154.5 MB | **268.8 ms** |
+
+Where the 270 ms actually goes — none of it is size:
+
+- Cold start (single-file extraction cache wiped) 312 ms vs 271 ms warm, so unpacking 155 MB
+  costs ~40 ms and only on first run. Every later launch pays nothing for the bulk.
+- `PublishReadyToRun` measured 269.6 ms — no change, so JIT is not the cost either.
+- The remainder is CLR + WinForms initialisation. It cannot be trimmed or AOT'd away:
+  `PublishAot`/trimming hard-fail with `NETSDK1175: Windows Forms is not supported or
+  recommended with trimming enabled`.
+
+Packaging sizes measured at the same time: self-contained single-file 154.5 MB (current);
+`+EnableCompressionInSingleFile` 68.6 MB but it decompresses on **every** launch — halves the
+download and makes startup worse, so do not use it if startup is the concern;
+self-contained + R2R 170.1 MB; framework-dependent + R2R 0.6 MB (needs the .NET 8 Desktop
+Runtime installed — not present on the dev machine, so its startup is unmeasured).
+
+Conclusion: only replacing WinForms helps. Lazarus/LCL captures ~82% of the available win
+(220 of 236 ms) and is the closest structural match — visual form designer, native Win32
+controls, OS-provided DPI and theming — so `MainForm.Designer.cs` would port near-mechanically.
+Raw Win32 (or Rust + windows-rs) buys a further 16 ms for substantially more work. Deferred as
+not worth 2–4 weeks of UI porting against a working, reviewed app; the Core test suite would
+serve as the conformance suite for any future port. The option does not expire.
+
+Two traps for anyone repeating this:
+
+- `Process.MainWindowHandle` returns LCL's hidden 0×0 utility window, not the form, so a naive
+  harness times the wrong thing. Enumerate visible, process-owned top-level windows instead and
+  require a plausible size. Symptom that caught it: child-control count 0 for LCL vs 29 for the
+  Win32 build.
+- The LCL prototype built its form in code via `CreateNew` (LCL will not show a resource-less
+  form through `Application.CreateForm`). A real port streams a `.lfm` from the designer, so
+  48.6 ms is a mild under-estimate.
+
 Release routine: bump `<Version>` in `src/MkvHippo.App/MkvHippo.App.csproj` → `dotnet test` →
 publish per §6 → copy to `dist/` → commit/push the source → `gh release create v<X.Y.Z>
 dist/MKVHippo.exe`. Name that asset explicitly, never `dist/*`: `dist/` is gitignored scratch
