@@ -223,10 +223,10 @@ All met as of v0.1.3:
 
 The brief above is fully implemented and shipped; treat it as the original spec, and this
 section as the delta. Repo remote: `Haddoxx/mkv_hippo` — public, GPLv3 (`LICENSE`).
-Releases: v0.1.0, v0.1.1, v0.1.2 (latest tagged). v0.1.3 is committed but not yet tagged or
-pushed. Only v0.1.2 carries the self-contained `MKVHippo.exe`; its asset was rebuilt post-tag
-to include the higher-fidelity icon, and the older exes were deleted (pre-PathMap, embedded
-local paths).
+Releases: v0.1.0, v0.1.1, v0.1.2, v0.1.3 (current, released 2026-09-27). v0.1.2 and v0.1.3
+carry the self-contained `MKVHippo.exe`; the v0.1.2 asset was rebuilt post-tag to include the
+higher-fidelity icon, and the v0.1.0/v0.1.1 exes were deleted (pre-PathMap, embedded local
+paths).
 
 Privacy posture (2026-07-05): commit history carries only `Haddoxx
 <Haddoxx@users.noreply.github.com>` (names and emails rewritten; git config matches), and
@@ -299,7 +299,7 @@ Verified against real mkvmerge on Linux via a throwaway harness over `MkvHippo.C
 ### v0.1.3, second pass (2026-09-26) — full-project review fixes
 
 A review of the whole tree (code + docs, not just a diff) found eleven items; all are fixed
-here, still under the unreleased v0.1.3.
+here and shipped in v0.1.3.
 
 - **Overlapping roots can no longer destroy a source file.** `EnsureValidRoots` guarded only
   "output inside input". The reverse was allowed and was the dangerous one: with input

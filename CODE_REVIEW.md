@@ -1,7 +1,8 @@
 # MKV Hippo Code Review
 
 Review date: 26 September 2026
-Reviewed at: v0.1.3 (unreleased), commit `40b045b`
+Reviewed at: commit `40b045b`, then v0.1.3 unreleased; the fixes shipped as v0.1.3 on
+2026-09-27
 Scope: the whole tree — engine, WinForms shell, tests, build configuration and all
 documentation. This supersedes the 1 September 2026 review, whose five findings were all
 fixed in the first v0.1.3 pass.
